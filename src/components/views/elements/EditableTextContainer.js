@@ -16,8 +16,8 @@ limitations under the License.
 
 import React from 'react';
 import PropTypes from 'prop-types';
-import sdk from '../../../index';
-import Promise from 'bluebird';
+import * as sdk from '../../../index';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
 /**
  * A component which wraps an EditableText, with a spinner while updates take
@@ -26,13 +26,14 @@ import Promise from 'bluebird';
  * Parent components should supply an 'onSubmit' callback which returns a
  * promise; a spinner is shown until the promise resolves.
  *
- * The parent can also supply a 'getIntialValue' callback, which works in a
+ * The parent can also supply a 'getInitialValue' callback, which works in a
  * similarly asynchronous way. If this is not provided, the initial value is
  * taken from the 'initialValue' property.
  */
+@replaceableComponent("views.elements.EditableTextContainer")
 export default class EditableTextContainer extends React.Component {
-    constructor(props, context) {
-        super(props, context);
+    constructor(props) {
+        super(props);
 
         this._unmounted = false;
         this.state = {
@@ -43,15 +44,15 @@ export default class EditableTextContainer extends React.Component {
         this._onValueChanged = this._onValueChanged.bind(this);
     }
 
-    componentWillMount() {
+    componentDidMount() {
         if (this.props.getInitialValue === undefined) {
             // use whatever was given in the initialValue property.
             return;
         }
 
-        this.setState({busy: true});
+        this.setState({ busy: true });
 
-        this.props.getInitialValue().done(
+        this.props.getInitialValue().then(
             (result) => {
                 if (this._unmounted) { return; }
                 this.setState({
@@ -83,7 +84,7 @@ export default class EditableTextContainer extends React.Component {
             errorString: null,
         });
 
-        this.props.onSubmit(value).done(
+        this.props.onSubmit(value).then(
             () => {
                 if (this._unmounted) { return; }
                 this.setState({
@@ -142,7 +143,6 @@ EditableTextContainer.propTypes = {
     /* should the input submit when focus is lost? */
     blurToSubmit: PropTypes.bool,
 };
-
 
 EditableTextContainer.defaultProps = {
     initialValue: "",

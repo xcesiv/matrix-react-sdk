@@ -18,16 +18,19 @@ limitations under the License.
 import React from 'react';
 import PropTypes from 'prop-types';
 
-import sdk from '../../../index';
+import * as sdk from '../../../index';
 import * as languageHandler from '../../../languageHandler';
 import SettingsStore from "../../../settings/SettingsStore";
+import { _t } from "../../../languageHandler";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
 function languageMatchesSearchQuery(query, language) {
-    if (language.label.toUpperCase().indexOf(query.toUpperCase()) == 0) return true;
-    if (language.value.toUpperCase() == query.toUpperCase()) return true;
+    if (language.label.toUpperCase().includes(query.toUpperCase())) return true;
+    if (language.value.toUpperCase() === query.toUpperCase()) return true;
     return false;
 }
 
+@replaceableComponent("views.elements.LanguageDropdown")
 export default class LanguageDropdown extends React.Component {
     constructor(props) {
         super(props);
@@ -39,29 +42,24 @@ export default class LanguageDropdown extends React.Component {
         };
     }
 
-    componentWillMount() {
+    componentDidMount() {
         languageHandler.getAllLanguagesFromJson().then((langs) => {
             langs.sort(function(a, b) {
                 if (a.label < b.label) return -1;
                 if (a.label > b.label) return 1;
                 return 0;
             });
-            this.setState({langs});
+            this.setState({ langs });
         }).catch(() => {
-            this.setState({langs: ['en']});
-        }).done();
+            this.setState({ langs: ['en'] });
+        });
 
         if (!this.props.value) {
             // If no value is given, we start with the first
             // country selected, but our parent component
             // doesn't know this, therefore we do this.
-            const language = SettingsStore.getValue("language", null, /*excludeDefault:*/true);
-            if (language) {
-              this.props.onOptionChange(language);
-            } else {
-              const language = languageHandler.normalizeLanguageKey(languageHandler.getLanguageFromBrowser());
-              this.props.onOptionChange(language);
-            }
+            const language = languageHandler.getUserLanguage();
+            this.props.onOptionChange(language);
         }
     }
 
@@ -99,15 +97,21 @@ export default class LanguageDropdown extends React.Component {
         let language = SettingsStore.getValue("language", null, /*excludeDefault:*/true);
         let value = null;
         if (language) {
-          value = this.props.value || language;
+            value = this.props.value || language;
         } else {
-          language = navigator.language || navigator.userLanguage;
-          value = this.props.value || language;
+            language = navigator.language || navigator.userLanguage;
+            value = this.props.value || language;
         }
 
-        return <Dropdown className={this.props.className}
-            onOptionChange={this.props.onOptionChange} onSearchChange={this._onSearchChange}
-            searchEnabled={true} value={value}
+        return <Dropdown
+            id="mx_LanguageDropdown"
+            className={this.props.className}
+            onOptionChange={this.props.onOptionChange}
+            onSearchChange={this._onSearchChange}
+            searchEnabled={true}
+            value={value}
+            label={_t("Language Dropdown")}
+            disabled={this.props.disabled}
         >
             { options }
         </Dropdown>;

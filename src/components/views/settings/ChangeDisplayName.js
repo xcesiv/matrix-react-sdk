@@ -1,6 +1,7 @@
 /*
 Copyright 2015, 2016 OpenMarket Ltd
 Copyright 2018 New Vector Ltd
+Copyright 2019 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,14 +17,14 @@ limitations under the License.
 */
 
 import React from 'react';
-import sdk from '../../../index';
-import MatrixClientPeg from '../../../MatrixClientPeg';
+import * as sdk from '../../../index';
+import { MatrixClientPeg } from '../../../MatrixClientPeg';
 import { _t } from '../../../languageHandler';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-module.exports = React.createClass({
-    displayName: 'ChangeDisplayName',
-
-    _getDisplayName: async function() {
+@replaceableComponent("views.settings.ChangeDisplayName")
+export default class ChangeDisplayName extends React.Component {
+    _getDisplayName = async () => {
         const cli = MatrixClientPeg.get();
         try {
             const res = await cli.getProfileInfo(cli.getUserId());
@@ -31,16 +32,16 @@ module.exports = React.createClass({
         } catch (e) {
             throw new Error("Failed to fetch display name");
         }
-    },
+    };
 
-    _changeDisplayName: function(newDisplayname) {
+    _changeDisplayName = (newDisplayname) => {
         const cli = MatrixClientPeg.get();
         return cli.setDisplayName(newDisplayname).catch(function(e) {
             throw new Error("Failed to set display name", e);
         });
-    },
+    };
 
-    render: function() {
+    render() {
         const EditableTextContainer = sdk.getComponent('elements.EditableTextContainer');
         return (
             <EditableTextContainer
@@ -49,5 +50,5 @@ module.exports = React.createClass({
                 blurToSubmit={true}
                 onSubmit={this._changeDisplayName} />
         );
-    },
-});
+    }
+}

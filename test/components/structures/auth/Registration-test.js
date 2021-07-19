@@ -14,14 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import expect from 'expect';
-import sinon from 'sinon';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import ReactTestUtils from 'react-dom/test-utils';
-import sdk from 'matrix-react-sdk';
+import sdk from '../../../skinned-sdk';
 import SdkConfig from '../../../../src/SdkConfig';
-import * as TestUtils from '../../../test-utils';
+import { mkServerConfig } from "../../../test-utils";
 
 const Registration = sdk.getComponent(
     'structures.auth.Registration',
@@ -31,21 +29,18 @@ describe('Registration', function() {
     let parentDiv;
 
     beforeEach(function() {
-        TestUtils.beforeEach(this);
         parentDiv = document.createElement('div');
         document.body.appendChild(parentDiv);
     });
 
     afterEach(function() {
-        sinon.restore();
         ReactDOM.unmountComponentAtNode(parentDiv);
         parentDiv.remove();
     });
 
     function render() {
         return ReactDOM.render(<Registration
-            defaultHsUrl="https://matrix.org"
-            defaultIsUrl="https://vector.im"
+            serverConfig={mkServerConfig("https://matrix.org", "https://vector.im")}
             makeRegistrationUrl={() => {}}
             onLoggedIn={() => {}}
             onLoginClick={() => {}}
@@ -53,25 +48,26 @@ describe('Registration', function() {
         />, parentDiv);
     }
 
-    it('should show server type selector', function() {
+    it('should show server picker', function() {
         const root = render();
-        const selector = ReactTestUtils.findRenderedComponentWithType(
-            root,
-            sdk.getComponent('auth.ServerTypeSelector'),
-        );
+        const selector = ReactTestUtils.findRenderedDOMComponentWithClass(root, "mx_ServerPicker");
         expect(selector).toBeTruthy();
     });
 
     it('should show form when custom URLs disabled', function() {
-        sinon.stub(SdkConfig, "get").returns({
+        jest.spyOn(SdkConfig, "get").mockReturnValue({
             disable_custom_urls: true,
         });
 
         const root = render();
 
-        // Set non-empty flows to get past the loading spinner
+        // Set non-empty flows & matrixClient to get past the loading spinner
         root.setState({
-            flows: [],
+            flows: [{
+                stages: [],
+            }],
+            matrixClient: {},
+            busy: false,
         });
 
         const form = ReactTestUtils.findRenderedComponentWithType(
@@ -79,5 +75,28 @@ describe('Registration', function() {
             sdk.getComponent('auth.RegistrationForm'),
         );
         expect(form).toBeTruthy();
+    });
+
+    it("should show SSO options if those are available", () => {
+        jest.spyOn(SdkConfig, "get").mockReturnValue({
+            disable_custom_urls: true,
+        });
+
+        const root = render();
+
+        // Set non-empty flows & matrixClient to get past the loading spinner
+        root.setState({
+            flows: [{
+                stages: [],
+            }],
+            ssoFlow: {
+                type: "m.login.sso",
+            },
+            matrixClient: {},
+            busy: false,
+        });
+
+        const ssoButton = ReactTestUtils.findRenderedDOMComponentWithClass(root, "mx_SSOButton");
+        expect(ssoButton).toBeTruthy();
     });
 });

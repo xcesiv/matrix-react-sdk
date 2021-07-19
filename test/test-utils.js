@@ -1,34 +1,16 @@
-"use strict";
-
-import sinon from 'sinon';
-import Promise from 'bluebird';
 import React from 'react';
-import PropTypes from 'prop-types';
-import peg from '../src/MatrixClientPeg';
-import dis from '../src/dispatcher';
-import jssdk from 'matrix-js-sdk';
-const MatrixEvent = jssdk.MatrixEvent;
+import { MatrixClientPeg as peg } from '../src/MatrixClientPeg';
+import dis from '../src/dispatcher/dispatcher';
+import { makeType } from "../src/utils/TypeUtils";
+import { ValidatedServerConfig } from "../src/utils/AutoDiscoveryUtils";
+import ShallowRenderer from 'react-test-renderer/shallow';
+import MatrixClientContext from "../src/contexts/MatrixClientContext";
+import { MatrixEvent } from "matrix-js-sdk/src/models/event";
 
-/**
- * Perform common actions before each test case, e.g. printing the test case
- * name to stdout.
- * @param {Mocha.Context} context  The test context
- */
-export function beforeEach(context) {
-    const desc = context.currentTest.fullTitle();
-
-    console.log();
-
-    // this puts a mark in the chrome devtools timeline, which can help
-    // figure out what's been going on.
-    if (console.timeStamp) {
-        console.timeStamp(desc);
-    }
-
-    console.log(desc);
-    console.log(new Array(1 + desc.length).join("="));
+export function getRenderer() {
+    // Old: ReactTestUtils.createRenderer();
+    return new ShallowRenderer();
 }
-
 
 /**
  * Stub out the MatrixClient, and configure the MatrixClientPeg object to
@@ -37,12 +19,8 @@ export function beforeEach(context) {
  * TODO: once the components are updated to get their MatrixClients from
  * the react context, we can get rid of this and just inject a test client
  * via the context instead.
- *
- * @returns {sinon.Sandbox}; remember to call sandbox.restore afterwards.
  */
 export function stubClient() {
-    const sandbox = sinon.sandbox.create();
-
     const client = createTestClient();
 
     // stub out the methods in MatrixClientPeg
@@ -51,12 +29,11 @@ export function stubClient() {
     // so we do this for each method
     const methods = ['get', 'unset', 'replaceUsingCreds'];
     for (let i = 0; i < methods.length; i++) {
-        sandbox.stub(peg, methods[i]);
+        peg[methods[i]] = jest.spyOn(peg, methods[i]);
     }
     // MatrixClientPeg.get() is called a /lot/, so implement it with our own
     // fast stub function rather than a sinon stub
     peg.get = function() { return client; };
-    return sandbox;
 }
 
 /**
@@ -66,27 +43,32 @@ export function stubClient() {
  */
 export function createTestClient() {
     return {
-        getHomeserverUrl: sinon.stub(),
-        getIdentityServerUrl: sinon.stub(),
-        getDomain: sinon.stub().returns("matrix.rog"),
-        getUserId: sinon.stub().returns("@userId:matrix.rog"),
+        getHomeserverUrl: jest.fn(),
+        getIdentityServerUrl: jest.fn(),
+        getDomain: jest.fn().mockReturnValue("matrix.rog"),
+        getUserId: jest.fn().mockReturnValue("@userId:matrix.rog"),
 
-        getPushActionsForEvent: sinon.stub(),
-        getRoom: sinon.stub().returns(mkStubRoom()),
-        getRooms: sinon.stub().returns([]),
-        getVisibleRooms: sinon.stub().returns([]),
-        getGroups: sinon.stub().returns([]),
-        loginFlows: sinon.stub(),
-        on: sinon.stub(),
-        removeListener: sinon.stub(),
-        isRoomEncrypted: sinon.stub().returns(false),
-        peekInRoom: sinon.stub().returns(Promise.resolve(mkStubRoom())),
+        getPushActionsForEvent: jest.fn(),
+        getRoom: jest.fn().mockImplementation(mkStubRoom),
+        getRooms: jest.fn().mockReturnValue([]),
+        getVisibleRooms: jest.fn().mockReturnValue([]),
+        getGroups: jest.fn().mockReturnValue([]),
+        loginFlows: jest.fn(),
+        on: jest.fn(),
+        removeListener: jest.fn(),
+        isRoomEncrypted: jest.fn().mockReturnValue(false),
+        peekInRoom: jest.fn().mockResolvedValue(mkStubRoom()),
 
-        paginateEventTimeline: sinon.stub().returns(Promise.resolve()),
-        sendReadReceipt: sinon.stub().returns(Promise.resolve()),
-        getRoomIdForAlias: sinon.stub().returns(Promise.resolve()),
-        getRoomDirectoryVisibility: sinon.stub().returns(Promise.resolve()),
-        getProfileInfo: sinon.stub().returns(Promise.resolve({})),
+        paginateEventTimeline: jest.fn().mockResolvedValue(undefined),
+        sendReadReceipt: jest.fn().mockResolvedValue(undefined),
+        getRoomIdForAlias: jest.fn().mockResolvedValue(undefined),
+        getRoomDirectoryVisibility: jest.fn().mockResolvedValue(undefined),
+        getProfileInfo: jest.fn().mockResolvedValue({}),
+        getThirdpartyProtocols: jest.fn().mockResolvedValue({}),
+        getClientWellKnown: jest.fn().mockReturnValue(null),
+        supportsVoip: jest.fn().mockReturnValue(true),
+        getTurnServersExpiry: jest.fn().mockReturnValue(2^32),
+        getThirdpartyUser: jest.fn().mockResolvedValue([]),
         getAccountData: (type) => {
             return mkEvent({
                 type,
@@ -95,12 +77,26 @@ export function createTestClient() {
             });
         },
         mxcUrlToHttp: (mxc) => 'http://this.is.a.url/',
-        setAccountData: sinon.stub(),
-        sendTyping: sinon.stub().returns(Promise.resolve({})),
-        sendMessage: () => Promise.resolve({}),
+        setAccountData: jest.fn(),
+        sendTyping: jest.fn().mockResolvedValue({}),
+        sendMessage: () => jest.fn().mockResolvedValue({}),
         getSyncState: () => "SYNCING",
         generateClientSecret: () => "t35tcl1Ent5ECr3T",
         isGuest: () => false,
+        isCryptoEnabled: () => false,
+        getSpaceSummary: jest.fn().mockReturnValue({
+            rooms: [],
+            events: [],
+        }),
+
+        // Used by various internal bits we aren't concerned with (yet)
+        sessionStore: {
+            store: {
+                getItem: jest.fn(),
+            },
+        },
+        decryptEventIfNeeded: () => Promise.resolve(),
+        isUserIgnored: jest.fn().mockReturnValue(false),
     };
 }
 
@@ -110,8 +106,8 @@ export function createTestClient() {
  * @param {string} opts.type The event.type
  * @param {string} opts.room The event.room_id
  * @param {string} opts.user The event.user_id
- * @param {string} opts.skey Optional. The state key (auto inserts empty string)
- * @param {Number} opts.ts   Optional. Timestamp for the event
+ * @param {string=} opts.skey Optional. The state key (auto inserts empty string)
+ * @param {number=} opts.ts   Optional. Timestamp for the event
  * @param {Object} opts.content The event.content
  * @param {boolean} opts.event True to make a MatrixEvent.
  * @return {Object} a JSON object representing this event.
@@ -132,7 +128,7 @@ export function mkEvent(opts) {
     if (opts.skey) {
         event.state_key = opts.skey;
     } else if (["m.room.name", "m.room.topic", "m.room.create", "m.room.join_rules",
-         "m.room.power_levels", "m.room.topic",
+         "m.room.power_levels", "m.room.topic", "m.room.history_visibility", "m.room.encryption",
          "com.example.state"].indexOf(opts.type) !== -1) {
         event.state_key = "";
     }
@@ -224,40 +220,65 @@ export function mkMessage(opts) {
     return mkEvent(opts);
 }
 
-export function mkStubRoom(roomId = null) {
+export function mkStubRoom(roomId = null, name) {
     const stubTimeline = { getEvents: () => [] };
     return {
         roomId,
-        getReceiptsForEvent: sinon.stub().returns([]),
-        getMember: sinon.stub().returns({
+        getReceiptsForEvent: jest.fn().mockReturnValue([]),
+        getMember: jest.fn().mockReturnValue({
             userId: '@member:domain.bla',
             name: 'Member',
+            rawDisplayName: 'Member',
             roomId: roomId,
             getAvatarUrl: () => 'mxc://avatar.url/image.png',
+            getMxcAvatarUrl: () => 'mxc://avatar.url/image.png',
         }),
-        getMembersWithMembership: sinon.stub().returns([]),
-        getJoinedMembers: sinon.stub().returns([]),
+        getMembersWithMembership: jest.fn().mockReturnValue([]),
+        getJoinedMembers: jest.fn().mockReturnValue([]),
+        getMembers: jest.fn().mockReturnValue([]),
         getPendingEvents: () => [],
         getLiveTimeline: () => stubTimeline,
         getUnfilteredTimelineSet: () => null,
+        findEventById: () => null,
         getAccountData: () => null,
         hasMembershipState: () => null,
         getVersion: () => '1',
         shouldUpgradeToVersion: () => null,
-        getMyMembership: () => "join",
+        getMyMembership: jest.fn().mockReturnValue("join"),
+        maySendMessage: jest.fn().mockReturnValue(true),
         currentState: {
-            getStateEvents: sinon.stub(),
-            mayClientSendStateEvent: sinon.stub().returns(true),
-            maySendStateEvent: sinon.stub().returns(true),
+            getStateEvents: jest.fn(),
+            getMember: jest.fn(),
+            mayClientSendStateEvent: jest.fn().mockReturnValue(true),
+            maySendStateEvent: jest.fn().mockReturnValue(true),
+            maySendEvent: jest.fn().mockReturnValue(true),
             members: [],
         },
-        tags: {
-            "m.favourite": {
-                order: 0.5,
-            },
-        },
-        setBlacklistUnverifiedDevices: sinon.stub(),
+        tags: {},
+        setBlacklistUnverifiedDevices: jest.fn(),
+        on: jest.fn(),
+        off: jest.fn(),
+        removeListener: jest.fn(),
+        getDMInviter: jest.fn(),
+        name,
+        getAvatarUrl: () => 'mxc://avatar.url/room.png',
+        getMxcAvatarUrl: () => 'mxc://avatar.url/room.png',
+        isSpaceRoom: jest.fn(() => false),
+        getUnreadNotificationCount: jest.fn(() => 0),
+        getEventReadUpTo: jest.fn(() => null),
+        getCanonicalAlias: jest.fn(),
+        getAltAliases: jest.fn().mockReturnValue([]),
+        timeline: [],
     };
+}
+
+export function mkServerConfig(hsUrl, isUrl) {
+    return makeType(ValidatedServerConfig, {
+        hsUrl,
+        hsName: "TEST_ENVIRONMENT",
+        hsNameIsDifferent: false, // yes, we lie
+        isUrl,
+    });
 }
 
 export function getDispatchForStore(store) {
@@ -272,22 +293,16 @@ export function getDispatchForStore(store) {
 
 export function wrapInMatrixClientContext(WrappedComponent) {
     class Wrapper extends React.Component {
-        static childContextTypes = {
-            matrixClient: PropTypes.object,
-        }
+        constructor(props) {
+            super(props);
 
-        getChildContext() {
-            return {
-                matrixClient: this._matrixClient,
-            };
-        }
-
-        componentWillMount() {
             this._matrixClient = peg.get();
         }
 
         render() {
-            return <WrappedComponent ref={this.props.wrappedRef} {...this.props} />;
+            return <MatrixClientContext.Provider value={this._matrixClient}>
+                <WrappedComponent ref={this.props.wrappedRef} {...this.props} />
+            </MatrixClientContext.Provider>;
         }
     }
     return Wrapper;
@@ -296,7 +311,7 @@ export function wrapInMatrixClientContext(WrappedComponent) {
 /**
  * Call fn before calling componentDidUpdate on a react component instance, inst.
  * @param {React.Component} inst an instance of a React component.
- * @param {integer} updates Number of updates to wait for. (Defaults to 1.)
+ * @param {number} updates Number of updates to wait for. (Defaults to 1.)
  * @returns {Promise} promise that resolves when componentDidUpdate is called on
  *                    given component instance.
  */

@@ -16,11 +16,12 @@ limitations under the License.
 
 import React from 'react';
 import Modal from './Modal';
-import sdk from './';
+import * as sdk from './';
 import MultiInviter from './utils/MultiInviter';
 import { _t } from './languageHandler';
-import MatrixClientPeg from './MatrixClientPeg';
+import { MatrixClientPeg } from './MatrixClientPeg';
 import GroupStore from './stores/GroupStore';
+import StyledCheckbox from './components/views/elements/StyledCheckbox';
 
 export function showGroupInviteDialog(groupId) {
     return new Promise((resolve, reject) => {
@@ -38,7 +39,7 @@ export function showGroupInviteDialog(groupId) {
         Modal.createTrackedDialog('Group Invite', '', AddressPickerDialog, {
             title: _t("Invite new community members"),
             description: description,
-            placeholder: _t("Name or matrix ID"),
+            placeholder: _t("Name or Matrix ID"),
             button: _t("Invite to Community"),
             validAddressTypes: ['mx-user-id'],
             onFinished: (success, addrs) => {
@@ -46,7 +47,7 @@ export function showGroupInviteDialog(groupId) {
 
                 _onGroupInviteFinished(groupId, addrs).then(resolve, reject);
             },
-        });
+        }, /*className=*/null, /*isPriority=*/false, /*isStatic=*/true);
     });
 }
 
@@ -60,19 +61,19 @@ export function showGroupAddRoomDialog(groupId) {
             <div>{ _t("Which rooms would you like to add to this community?") }</div>
         </div>;
 
-        const checkboxContainer = <label className="mx_GroupAddressPicker_checkboxContainer">
-            <input type="checkbox" onClick={onCheckboxClicked} />
-            <div>
-                { _t("Show these rooms to non-members on the community page and room list?") }
-            </div>
-        </label>;
+        const checkboxContainer = <StyledCheckbox
+            className="mx_GroupAddressPicker_checkboxContainer"
+            onChange={onCheckboxClicked}
+        >
+            { _t("Show these rooms to non-members on the community page and room list?") }
+        </StyledCheckbox>;
 
         const AddressPickerDialog = sdk.getComponent("dialogs.AddressPickerDialog");
         Modal.createTrackedDialog('Add Rooms to Group', '', AddressPickerDialog, {
             title: _t("Add rooms to the community"),
             description: description,
             extraNode: checkboxContainer,
-            placeholder: _t("Room name or alias"),
+            placeholder: _t("Room name or address"),
             button: _t("Add to community"),
             pickerType: 'room',
             validAddressTypes: ['mx-room-id'],
@@ -81,7 +82,7 @@ export function showGroupAddRoomDialog(groupId) {
 
                 _onGroupAddRoomFinished(groupId, addrs, addRoomsPublicly).then(resolve, reject);
             },
-        });
+        }, /*className=*/null, /*isPriority=*/false, /*isStatic=*/true);
     });
 }
 
@@ -102,7 +103,7 @@ function _onGroupInviteFinished(groupId, addrs) {
         if (errorList.length > 0) {
             const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
             Modal.createTrackedDialog('Failed to invite the following users to the group', '', ErrorDialog, {
-                title: _t("Failed to invite the following users to %(groupId)s:", {groupId: groupId}),
+                title: _t("Failed to invite the following users to %(groupId)s:", { groupId: groupId }),
                 description: errorList.join(", "),
             });
         }
@@ -110,7 +111,7 @@ function _onGroupInviteFinished(groupId, addrs) {
         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
         Modal.createTrackedDialog('Failed to invite users to group', '', ErrorDialog, {
             title: _t("Failed to invite users to community"),
-            description: _t("Failed to invite users to %(groupId)s", {groupId: groupId}),
+            description: _t("Failed to invite users to %(groupId)s", { groupId: groupId }),
         });
     });
 }
@@ -118,7 +119,7 @@ function _onGroupInviteFinished(groupId, addrs) {
 function _onGroupAddRoomFinished(groupId, addrs, addRoomsPublicly) {
     const matrixClient = MatrixClientPeg.get();
     const errorList = [];
-    return Promise.all(addrs.map((addr) => {
+    return Promise.allSettled(addrs.map((addr) => {
         return GroupStore
             .addRoomToGroup(groupId, addr.address, addRoomsPublicly)
             .catch(() => { errorList.push(addr.address); })
@@ -136,9 +137,9 @@ function _onGroupAddRoomFinished(groupId, addrs, addRoomsPublicly) {
                 // Add this group as related
                 if (!groups.includes(groupId)) {
                     groups.push(groupId);
-                    return MatrixClientPeg.get().sendStateEvent(roomId, 'm.room.related_groups', {groups}, '');
+                    return MatrixClientPeg.get().sendStateEvent(roomId, 'm.room.related_groups', { groups }, '');
                 }
-            }).reflect();
+            });
     })).then(() => {
         if (errorList.length === 0) {
             return;
@@ -146,13 +147,15 @@ function _onGroupAddRoomFinished(groupId, addrs, addRoomsPublicly) {
         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
         Modal.createTrackedDialog(
             'Failed to add the following room to the group',
-            '', ErrorDialog,
-        {
-            title: _t(
-                "Failed to add the following rooms to %(groupId)s:",
-                {groupId},
-            ),
-            description: errorList.join(", "),
-        });
+            '',
+            ErrorDialog,
+            {
+                title: _t(
+                    "Failed to add the following rooms to %(groupId)s:",
+                    { groupId },
+                ),
+                description: errorList.join(", "),
+            },
+        );
     });
 }

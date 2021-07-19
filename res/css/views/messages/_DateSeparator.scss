@@ -19,7 +19,7 @@ limitations under the License.
     margin: 4px 0;
     display: flex;
     align-items: center;
-    font-size: 14px;
+    font-size: $font-14px;
     color: $roomtopic-color;
 }
 
@@ -30,7 +30,7 @@ limitations under the License.
     border-bottom: 1px solid $panel-divider-color;
 }
 
-.mx_DateSeparator > date {
+.mx_DateSeparator > div {
     margin: 0 25px;
     flex: 0 0 auto;
 }

@@ -1,6 +1,7 @@
 /*
 Copyright 2017 Vector Creations Ltd.
 Copyright 2017 New Vector Ltd.
+Copyright 2019 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,44 +17,43 @@ limitations under the License.
 */
 import React from 'react';
 import { _t } from '../../../languageHandler';
-import sdk from '../../../index';
-import dis from '../../../dispatcher';
+import * as sdk from '../../../index';
+import dis from '../../../dispatcher/dispatcher';
 import GroupStore from '../../../stores/GroupStore';
 import PropTypes from 'prop-types';
 import { showGroupInviteDialog } from '../../../GroupAddressPicker';
 import AccessibleButton from '../elements/AccessibleButton';
-import TintableSvg from '../elements/TintableSvg';
-import RightPanel from '../../structures/RightPanel';
+import { RightPanelPhases } from "../../../stores/RightPanelStorePhases";
+import AutoHideScrollbar from "../../structures/AutoHideScrollbar";
+import { Action } from "../../../dispatcher/actions";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
 const INITIAL_LOAD_NUM_MEMBERS = 30;
 
-export default React.createClass({
-    displayName: 'GroupMemberList',
-
-    propTypes: {
+@replaceableComponent("views.groups.GroupMemberList")
+export default class GroupMemberList extends React.Component {
+    static propTypes = {
         groupId: PropTypes.string.isRequired,
-    },
+    };
 
-    getInitialState: function() {
-        return {
-            members: null,
-            membersError: null,
-            invitedMembers: null,
-            invitedMembersError: null,
-            truncateAt: INITIAL_LOAD_NUM_MEMBERS,
-        };
-    },
+    state = {
+        members: null,
+        membersError: null,
+        invitedMembers: null,
+        invitedMembersError: null,
+        truncateAt: INITIAL_LOAD_NUM_MEMBERS,
+    };
 
-    componentWillMount: function() {
+    componentDidMount() {
         this._unmounted = false;
         this._initGroupStore(this.props.groupId);
-    },
+    }
 
-    componentWillUnmount: function() {
+    componentWillUnmount() {
         this._unmounted = true;
-    },
+    }
 
-    _initGroupStore: function(groupId) {
+    _initGroupStore(groupId) {
         GroupStore.registerListener(groupId, () => {
             this._fetchMembers();
         });
@@ -70,17 +70,17 @@ export default React.createClass({
                 });
             }
         });
-    },
+    }
 
-    _fetchMembers: function() {
+    _fetchMembers() {
         if (this._unmounted) return;
         this.setState({
             members: GroupStore.getGroupMembers(this.props.groupId),
             invitedMembers: GroupStore.getGroupInvitedMembers(this.props.groupId),
         });
-    },
+    }
 
-    _createOverflowTile: function(overflowCount, totalCount) {
+    _createOverflowTile = (overflowCount, totalCount) => {
         // For now we'll pretend this is any entity. It should probably be a separate tile.
         const EntityTile = sdk.getComponent("rooms.EntityTile");
         const BaseAvatar = sdk.getComponent("avatars.BaseAvatar");
@@ -91,19 +91,19 @@ export default React.createClass({
             } name={text} presenceState="online" suppressOnHover={true}
             onClick={this._showFullMemberList} />
         );
-    },
+    };
 
-    _showFullMemberList: function() {
+    _showFullMemberList = () => {
         this.setState({
             truncateAt: -1,
         });
-    },
+    };
 
-    onSearchQueryChanged: function(ev) {
+    onSearchQueryChanged = ev => {
         this.setState({ searchQuery: ev.target.value });
-    },
+    };
 
-    makeGroupMemberTiles: function(query, memberList, memberListError) {
+    makeGroupMemberTiles(query, memberList, memberListError) {
         if (memberListError) {
             return <div className="warning">{ _t("Failed to load group members") }</div>;
         }
@@ -157,20 +157,19 @@ export default React.createClass({
         >
             { memberTiles }
         </TruncatedList>;
-    },
+    }
 
-    onInviteToGroupButtonClick() {
+    onInviteToGroupButtonClick = () => {
         showGroupInviteDialog(this.props.groupId).then(() => {
             dis.dispatch({
-                action: 'view_right_panel_phase',
-                phase: RightPanel.Phase.GroupMemberList,
-                groupId: this.props.groupId,
+                action: Action.SetRightPanelPhase,
+                phase: RightPanelPhases.GroupMemberList,
+                refireParams: { groupId: this.props.groupId },
             });
         });
-    },
+    };
 
-    render: function() {
-        const GeminiScrollbarWrapper = sdk.getComponent("elements.GeminiScrollbarWrapper");
+    render() {
         if (this.state.fetching || this.state.fetchingInvitedMembers) {
             const Spinner = sdk.getComponent("elements.Spinner");
             return (<div className="mx_MemberList">
@@ -179,9 +178,15 @@ export default React.createClass({
         }
 
         const inputBox = (
-            <input className="mx_GroupMemberList_query mx_textinput" id="mx_GroupMemberList_query" type="text"
-                    onChange={this.onSearchQueryChanged} value={this.state.searchQuery}
-                    placeholder={_t('Filter community members')} autoComplete="off" />
+            <input
+                className="mx_GroupMemberList_query mx_textinput"
+                id="mx_GroupMemberList_query"
+                type="text"
+                onChange={this.onSearchQueryChanged}
+                value={this.state.searchQuery}
+                placeholder={_t('Filter community members')}
+                autoComplete="off"
+            />
         );
 
         const joined = this.state.members ? <div className="mx_MemberList_joined">
@@ -209,26 +214,24 @@ export default React.createClass({
         let inviteButton;
         if (GroupStore.isUserPrivileged(this.props.groupId)) {
             inviteButton = (
-            <AccessibleButton
-                className="mx_RightPanel_invite"
-                onClick={this.onInviteToGroupButtonClick}
-            >
-                <div className="mx_RightPanel_icon" >
-                    <TintableSvg src={require("../../../../res/img/icon-invite-people.svg")} width="18" height="14" />
-                </div>
-                <div className="mx_RightPanel_message">{ _t('Invite to this community') }</div>
-            </AccessibleButton>);
+                <AccessibleButton
+                    className="mx_MemberList_invite mx_MemberList_inviteCommunity"
+                    onClick={this.onInviteToGroupButtonClick}
+                >
+                    <span>{ _t('Invite to this community') }</span>
+                </AccessibleButton>
+            );
         }
 
         return (
-            <div className="mx_MemberList">
+            <div className="mx_MemberList" role="tabpanel">
                 { inviteButton }
-                <GeminiScrollbarWrapper autoshow={true}>
+                <AutoHideScrollbar>
                     { joined }
                     { invited }
-                </GeminiScrollbarWrapper>
+                </AutoHideScrollbar>
                 { inputBox }
             </div>
         );
-    },
-});
+    }
+}

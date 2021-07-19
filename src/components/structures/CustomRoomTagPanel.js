@@ -17,11 +17,13 @@ limitations under the License.
 import React from 'react';
 import CustomRoomTagStore from '../../stores/CustomRoomTagStore';
 import AutoHideScrollbar from './AutoHideScrollbar';
-import sdk from '../../index';
-import dis from '../../dispatcher';
+import * as sdk from '../../index';
+import dis from '../../dispatcher/dispatcher';
 import classNames from 'classnames';
 import * as FormattingUtils from '../../utils/FormattingUtils';
+import { replaceableComponent } from "../../utils/replaceableComponent";
 
+@replaceableComponent("structures.CustomRoomTagPanel")
 class CustomRoomTagPanel extends React.Component {
     constructor(props) {
         super(props);
@@ -30,9 +32,9 @@ class CustomRoomTagPanel extends React.Component {
         };
     }
 
-    componentWillMount() {
+    componentDidMount() {
         this._tagStoreToken = CustomRoomTagStore.addListener(() => {
-            this.setState({tags: CustomRoomTagStore.getSortedTags()});
+            this.setState({ tags: CustomRoomTagStore.getSortedTags() });
         });
     }
 
@@ -61,53 +63,33 @@ class CustomRoomTagPanel extends React.Component {
 }
 
 class CustomRoomTagTile extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = {hover: false};
-        this.onClick = this.onClick.bind(this);
-        this.onMouseOut = this.onMouseOut.bind(this);
-        this.onMouseOver = this.onMouseOver.bind(this);
-    }
-
-    onMouseOver() {
-        this.setState({hover: true});
-    }
-
-    onMouseOut() {
-        this.setState({hover: false});
-    }
-
-    onClick() {
-        dis.dispatch({action: 'select_custom_room_tag', tag: this.props.tag.name});
-    }
+    onClick = () => {
+        dis.dispatch({ action: 'select_custom_room_tag', tag: this.props.tag.name });
+    };
 
     render() {
         const BaseAvatar = sdk.getComponent('avatars.BaseAvatar');
-        const AccessibleButton = sdk.getComponent('elements.AccessibleButton');
-        const Tooltip = sdk.getComponent('elements.Tooltip');
+        const AccessibleTooltipButton = sdk.getComponent('elements.AccessibleTooltipButton');
 
         const tag = this.props.tag;
         const avatarHeight = 40;
         const className = classNames({
-            CustomRoomTagPanel_tileSelected: tag.selected,
+            "CustomRoomTagPanel_tileSelected": tag.selected,
         });
         const name = tag.name;
-        const badge = tag.badge;
+        const badgeNotifState = tag.badgeNotifState;
         let badgeElement;
-        if (badge) {
+        if (badgeNotifState) {
             const badgeClasses = classNames({
                 "mx_TagTile_badge": true,
-                "mx_TagTile_badgeHighlight": badge.highlight,
+                "mx_TagTile_badgeHighlight": badgeNotifState.hasMentions,
             });
-            badgeElement = (<div className={badgeClasses}>{FormattingUtils.formatCount(badge.count)}</div>);
+            badgeElement = (<div className={badgeClasses}>{FormattingUtils.formatCount(badgeNotifState.count)}</div>);
         }
 
-        const tip = (this.state.hover ?
-            <Tooltip className="mx_TagTile_tooltip" label={name} /> :
-            <div />);
         return (
-            <AccessibleButton className={className} onClick={this.onClick}>
-                <div className="mx_TagTile_avatar" onMouseOver={this.onMouseOver} onMouseOut={this.onMouseOut}>
+            <AccessibleTooltipButton className={className} onClick={this.onClick} title={name}>
+                <div className="mx_TagTile_avatar">
                     <BaseAvatar
                         name={tag.avatarLetter}
                         idName={name}
@@ -115,9 +97,8 @@ class CustomRoomTagTile extends React.Component {
                         height={avatarHeight}
                     />
                     { badgeElement }
-                    { tip }
                 </div>
-            </AccessibleButton>
+            </AccessibleTooltipButton>
         );
     }
 }

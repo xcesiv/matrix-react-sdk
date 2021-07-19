@@ -17,14 +17,14 @@ limitations under the License.
 import React from 'react';
 import PropTypes from 'prop-types';
 import AccessibleButton from './AccessibleButton';
-import dis from '../../../dispatcher';
-import sdk from '../../../index';
+import dis from '../../../dispatcher/dispatcher';
+import * as sdk from '../../../index';
 import Analytics from '../../../Analytics';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-export default React.createClass({
-    displayName: 'RoleButton',
-
-    propTypes: {
+@replaceableComponent("views.elements.ActionButton")
+export default class ActionButton extends React.Component {
+    static propTypes = {
         size: PropTypes.string,
         tooltip: PropTypes.bool,
         action: PropTypes.string.isRequired,
@@ -32,41 +32,36 @@ export default React.createClass({
         label: PropTypes.string.isRequired,
         iconPath: PropTypes.string,
         className: PropTypes.string,
-    },
+        children: PropTypes.node,
+    };
 
-    getDefaultProps: function() {
-        return {
-            size: "25",
-            tooltip: false,
-        };
-    },
+    static defaultProps = {
+        size: "25",
+        tooltip: false,
+    };
 
-    getInitialState: function() {
-        return {
-            showTooltip: false,
-        };
-    },
+    state = {
+        showTooltip: false,
+    };
 
-    _onClick: function(ev) {
+    _onClick = (ev) => {
         ev.stopPropagation();
         Analytics.trackEvent('Action Button', 'click', this.props.action);
-        dis.dispatch({action: this.props.action});
-    },
+        dis.dispatch({ action: this.props.action });
+    };
 
-    _onMouseEnter: function() {
-        if (this.props.tooltip) this.setState({showTooltip: true});
+    _onMouseEnter = () => {
+        if (this.props.tooltip) this.setState({ showTooltip: true });
         if (this.props.mouseOverAction) {
-            dis.dispatch({action: this.props.mouseOverAction});
+            dis.dispatch({ action: this.props.mouseOverAction });
         }
-    },
+    };
 
-    _onMouseLeave: function() {
-        this.setState({showTooltip: false});
-    },
+    _onMouseLeave = () => {
+        this.setState({ showTooltip: false });
+    };
 
-    render: function() {
-        const TintableSvg = sdk.getComponent("elements.TintableSvg");
-
+    render() {
         let tooltip;
         if (this.state.showTooltip) {
             const Tooltip = sdk.getComponent("elements.Tooltip");
@@ -74,8 +69,8 @@ export default React.createClass({
         }
 
         const icon = this.props.iconPath ?
-                (<TintableSvg src={this.props.iconPath} width={this.props.size} height={this.props.size} />) :
-                undefined;
+            (<img src={this.props.iconPath} width={this.props.size} height={this.props.size} />) :
+            undefined;
 
         const classNames = ["mx_RoleButton"];
         if (this.props.className) {
@@ -83,7 +78,8 @@ export default React.createClass({
         }
 
         return (
-            <AccessibleButton className={classNames.join(" ")}
+            <AccessibleButton
+                className={classNames.join(" ")}
                 onClick={this._onClick}
                 onMouseEnter={this._onMouseEnter}
                 onMouseLeave={this._onMouseLeave}
@@ -91,7 +87,8 @@ export default React.createClass({
             >
                 { icon }
                 { tooltip }
+                { this.props.children }
             </AccessibleButton>
         );
-    },
-});
+    }
+}

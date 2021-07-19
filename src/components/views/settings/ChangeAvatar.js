@@ -14,15 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-const React = require('react');
+import React from 'react';
 import PropTypes from 'prop-types';
-const MatrixClientPeg = require("../../../MatrixClientPeg");
-const sdk = require('../../../index');
+import { MatrixClientPeg } from "../../../MatrixClientPeg";
+import * as sdk from '../../../index';
 import { _t } from '../../../languageHandler';
+import Spinner from '../elements/Spinner';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
+import { mediaFromMxc } from "../../../customisations/Media";
 
-module.exports = React.createClass({
-    displayName: 'ChangeAvatar',
-    propTypes: {
+@replaceableComponent("views.settings.ChangeAvatar")
+export default class ChangeAvatar extends React.Component {
+    static propTypes = {
         initialAvatarUrl: PropTypes.string,
         room: PropTypes.object,
         // if false, you need to call changeAvatar.onFileSelected yourself.
@@ -30,35 +33,36 @@ module.exports = React.createClass({
         width: PropTypes.number,
         height: PropTypes.number,
         className: PropTypes.string,
-    },
+    };
 
-    Phases: {
+    static Phases = {
         Display: "display",
         Uploading: "uploading",
         Error: "error",
-    },
+    };
 
-    getDefaultProps: function() {
-        return {
-            showUploadSection: true,
-            className: "",
-            width: 80,
-            height: 80,
-        };
-    },
+    static defaultProps = {
+        showUploadSection: true,
+        className: "",
+        width: 80,
+        height: 80,
+    };
 
-    getInitialState: function() {
-        return {
+    constructor(props) {
+        super(props);
+
+        this.state = {
             avatarUrl: this.props.initialAvatarUrl,
-            phase: this.Phases.Display,
+            phase: ChangeAvatar.Phases.Display,
         };
-    },
+    }
 
-    componentWillMount: function() {
+    componentDidMount() {
         MatrixClientPeg.get().on("RoomState.events", this.onRoomStateEvents);
-    },
+    }
 
-    componentWillReceiveProps: function(newProps) {
+    // TODO: [REACT-WARNING] Replace with appropriate lifecycle event
+    UNSAFE_componentWillReceiveProps(newProps) { // eslint-disable-line camelcase
         if (this.avatarSet) {
             // don't clobber what the user has just set
             return;
@@ -66,15 +70,15 @@ module.exports = React.createClass({
         this.setState({
             avatarUrl: newProps.initialAvatarUrl,
         });
-    },
+    }
 
-    componentWillUnmount: function() {
+    componentWillUnmount() {
         if (MatrixClientPeg.get()) {
             MatrixClientPeg.get().removeListener("RoomState.events", this.onRoomStateEvents);
         }
-    },
+    }
 
-    onRoomStateEvents: function(ev) {
+    onRoomStateEvents = (ev) => {
         if (!this.props.room) {
             return;
         }
@@ -88,13 +92,13 @@ module.exports = React.createClass({
             this.avatarSet = false;
             this.setState({}); // force update
         }
-    },
+    };
 
-    setAvatarFromFile: function(file) {
+    setAvatarFromFile(file) {
         let newUrl = null;
 
         this.setState({
-            phase: this.Phases.Uploading,
+            phase: ChangeAvatar.Phases.Uploading,
         });
         const self = this;
         const httpPromise = MatrixClientPeg.get().uploadContent(file).then(function(url) {
@@ -103,7 +107,7 @@ module.exports = React.createClass({
                 return MatrixClientPeg.get().sendStateEvent(
                     self.props.room.roomId,
                     'm.room.avatar',
-                    {url: url},
+                    { url: url },
                     '',
                 );
             } else {
@@ -111,44 +115,46 @@ module.exports = React.createClass({
             }
         });
 
-        httpPromise.done(function() {
+        httpPromise.then(function() {
             self.setState({
-                phase: self.Phases.Display,
-                avatarUrl: MatrixClientPeg.get().mxcUrlToHttp(newUrl),
+                phase: ChangeAvatar.Phases.Display,
+                avatarUrl: mediaFromMxc(newUrl).srcHttp,
             });
         }, function(error) {
             self.setState({
-                phase: self.Phases.Error,
+                phase: ChangeAvatar.Phases.Error,
             });
             self.onError(error);
         });
 
         return httpPromise;
-    },
+    }
 
-    onFileSelected: function(ev) {
+    onFileSelected = (ev) => {
         this.avatarSet = true;
         return this.setAvatarFromFile(ev.target.files[0]);
-    },
+    };
 
-    onError: function(error) {
+    onError = (error) => {
         this.setState({
             errorText: _t("Failed to upload profile picture!"),
         });
-    },
+    };
 
-    render: function() {
+    render() {
         let avatarImg;
         // Having just set an avatar we just display that since it will take a little
         // time to propagate through to the RoomAvatar.
         if (this.props.room && !this.avatarSet) {
             const RoomAvatar = sdk.getComponent('avatars.RoomAvatar');
-            avatarImg = <RoomAvatar room={this.props.room} width={this.props.width} height={this.props.height} resizeMethod='crop' />;
+            avatarImg = <RoomAvatar
+                room={this.props.room} width={this.props.width} height={this.props.height} resizeMethod='crop'
+            />;
         } else {
             const BaseAvatar = sdk.getComponent("avatars.BaseAvatar");
             // XXX: FIXME: once we track in the JS what our own displayname is(!) then use it here rather than ?
             avatarImg = <BaseAvatar width={this.props.width} height={this.props.height} resizeMethod='crop'
-                        name='?' idName={MatrixClientPeg.get().getUserIdLocalpart()} url={this.state.avatarUrl} />;
+                name='?' idName={MatrixClientPeg.get().getUserIdLocalpart()} url={this.state.avatarUrl} />;
         }
 
         let uploadSection;
@@ -163,8 +169,8 @@ module.exports = React.createClass({
         }
 
         switch (this.state.phase) {
-            case this.Phases.Display:
-            case this.Phases.Error:
+            case ChangeAvatar.Phases.Display:
+            case ChangeAvatar.Phases.Error:
                 return (
                     <div>
                         <div className={this.props.className}>
@@ -173,11 +179,10 @@ module.exports = React.createClass({
                         { uploadSection }
                     </div>
                 );
-            case this.Phases.Uploading:
-                var Loader = sdk.getComponent("elements.Spinner");
+            case ChangeAvatar.Phases.Uploading:
                 return (
-                    <Loader />
+                    <Spinner />
                 );
         }
-    },
-});
+    }
+}

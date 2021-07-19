@@ -14,19 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-'use strict';
-
 import React from 'react';
 import PropTypes from 'prop-types';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
 /*
  * This component can be used to display generic HTML content in a contextual
  * menu.
  */
 
-
+@replaceableComponent("views.context_menus.GenericElementContextMenu")
 export default class GenericElementContextMenu extends React.Component {
-    static PropTypes = {
+    static propTypes = {
         element: PropTypes.element.isRequired,
         // Function to be called when the parent window is resized
         // This can be used to reposition or close the menu on resize and

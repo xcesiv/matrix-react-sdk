@@ -17,6 +17,11 @@ limitations under the License.
 .mx_MyGroups {
     display: flex;
     flex-direction: column;
+
+    .mx_BetaCard {
+        margin: 0 72px;
+        max-width: 760px;
+    }
 }
 
 .mx_MyGroups .mx_RoomHeader_simpleHeader {
@@ -30,7 +35,7 @@ limitations under the License.
     flex-wrap: wrap;
 }
 
-.mx_MyGroups > :not(.mx_RoomHeader) {
+.mx_MyGroups > :not(.mx_RoomHeader):not(.mx_BetaCard) {
     max-width: 960px;
     margin: 40px;
 }
@@ -52,7 +57,7 @@ limitations under the License.
     background-color: $roomheader-addroom-bg-color;
     position: relative;
 
-    &:before {
+    &::before {
         background-color: $roomheader-addroom-fg-color;
         mask: url('$(res)/img/icons-create-room.svg');
         mask-repeat: no-repeat;
@@ -66,9 +71,6 @@ limitations under the License.
         right: 0;
     }
 }
-
-
-
 
 .mx_MyGroups_headerCard_header {
     font-weight: bold;
@@ -98,12 +100,17 @@ limitations under the License.
 
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+}
+
+.mx_MyGroups_scrollable {
+    overflow-y: inherit;
 }
 
 .mx_MyGroups_placeholder {
     background-color: $info-plinth-bg-color;
     color: $info-plinth-fg-color;
-    line-height: 400px;
+    line-height: $font-400px;
     border-radius: 10px;
     text-align: center;
 }
@@ -113,8 +120,7 @@ limitations under the License.
     overflow-x: hidden;
 
     display: flex;
-    flex-direction: row;
-    flex-flow: wrap;
+    flex-flow: row wrap;
     align-content: flex-start;
 }
 
@@ -148,22 +154,19 @@ limitations under the License.
 
 .mx_GroupTile_profile .mx_GroupTile_name {
     margin: 0px;
-    font-size: 15px;
+    font-size: $font-15px;
 }
 
 .mx_GroupTile_profile .mx_GroupTile_groupId {
-    font-size: 13px;
+    font-size: $font-13px;
+    opacity: 0.7;
 }
 
 .mx_GroupTile_profile .mx_GroupTile_desc {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    font-size: 13px;
+    font-size: $font-13px;
     max-height: 36px;
     overflow: hidden;
-}
-
-.mx_GroupTile_profile .mx_GroupTile_groupId {
-    opacity: 0.7;
 }

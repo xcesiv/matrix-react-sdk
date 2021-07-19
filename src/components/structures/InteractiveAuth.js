@@ -1,5 +1,6 @@
 /*
 Copyright 2017 Vector Creations Ltd.
+Copyright 2019, 2020 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,18 +15,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import Matrix from 'matrix-js-sdk';
-const InteractiveAuth = Matrix.InteractiveAuth;
-
-import React from 'react';
+import { InteractiveAuth } from "matrix-js-sdk/src/interactive-auth";
+import React, { createRef } from 'react';
 import PropTypes from 'prop-types';
 
-import {getEntryComponentForLoginType} from '../views/auth/InteractiveAuthEntryComponents';
+import getEntryComponentForLoginType from '../views/auth/InteractiveAuthEntryComponents';
 
-export default React.createClass({
-    displayName: 'InteractiveAuth',
+import * as sdk from '../../index';
+import { replaceableComponent } from "../../utils/replaceableComponent";
 
-    propTypes: {
+export const ERROR_USER_CANCELLED = new Error("User cancelled auth session");
+
+@replaceableComponent("structures.InteractiveAuthComponent")
+export default class InteractiveAuthComponent extends React.Component {
+    static propTypes = {
         // matrix client to use for UI auth requests
         matrixClient: PropTypes.object.isRequired,
 
@@ -45,13 +48,13 @@ export default React.createClass({
         // @param {bool} status True if the operation requiring
         //     auth was completed sucessfully, false if canceled.
         // @param {object} result The result of the authenticated call
-        //     if successful, otherwise the error object
+        //     if successful, otherwise the error object.
         // @param {object} extra Additional information about the UI Auth
         //     process:
         //      * emailSid {string} If email auth was performed, the sid of
         //            the auth session.
         //      * clientSecret {string} The client secret used in auth
-        //            sessions with the ID server.
+        //            sessions with the identity server.
         onAuthFinished: PropTypes.func.isRequired,
 
         // Inputs provided by the user to the auth process
@@ -60,7 +63,7 @@ export default React.createClass({
         inputs: PropTypes.object,
 
         // As js-sdk interactive-auth
-        makeRegistrationUrl: PropTypes.func,
+        requestEmailToken: PropTypes.func,
         sessionId: PropTypes.string,
         clientSecret: PropTypes.string,
         emailSid: PropTypes.string,
@@ -73,31 +76,54 @@ export default React.createClass({
         // is managed by some other party and should not be managed by
         // the component itself.
         continueIsManaged: PropTypes.bool,
-    },
 
-    getInitialState: function() {
-        return {
+        // Called when the stage changes, or the stage's phase changes. First
+        // argument is the stage, second is the phase. Some stages do not have
+        // phases and will be counted as 0 (numeric).
+        onStagePhaseChange: PropTypes.func,
+
+        // continueText and continueKind are passed straight through to the AuthEntryComponent.
+        continueText: PropTypes.string,
+        continueKind: PropTypes.string,
+    };
+
+    constructor(props) {
+        super(props);
+
+        this.state = {
             authStage: null,
             busy: false,
             errorText: null,
             stageErrorText: null,
             submitButtonEnabled: false,
         };
-    },
 
-    componentWillMount: function() {
         this._unmounted = false;
         this._authLogic = new InteractiveAuth({
             authData: this.props.authData,
             doRequest: this._requestCallback,
+            busyChanged: this._onBusyChanged,
             inputs: this.props.inputs,
             stateUpdated: this._authStateUpdated,
             matrixClient: this.props.matrixClient,
             sessionId: this.props.sessionId,
             clientSecret: this.props.clientSecret,
             emailSid: this.props.emailSid,
+            requestEmailToken: this._requestEmailToken,
         });
 
+        this._intervalId = null;
+        if (this.props.poll) {
+            this._intervalId = setInterval(() => {
+                this._authLogic.poll();
+            }, 2000);
+        }
+
+        this._stageComponent = createRef();
+    }
+
+    // TODO: [REACT-WARNING] Replace component with real class, use constructor for refs
+    UNSAFE_componentWillMount() { // eslint-disable-line camelcase
         this._authLogic.attemptAuth().then((result) => {
             const extra = {
                 emailSid: this._authLogic.getEmailSid(),
@@ -115,81 +141,114 @@ export default React.createClass({
             this.setState({
                 errorText: msg,
             });
-        }).done();
+        });
+    }
 
-        this._intervalId = null;
-        if (this.props.poll) {
-            this._intervalId = setInterval(() => {
-                this._authLogic.poll();
-            }, 2000);
-        }
-    },
-
-    componentWillUnmount: function() {
+    componentWillUnmount() {
         this._unmounted = true;
 
         if (this._intervalId !== null) {
             clearInterval(this._intervalId);
         }
-    },
+    }
 
-    tryContinue: function() {
-        if (this.refs.stageComponent && this.refs.stageComponent.tryContinue) {
-            this.refs.stageComponent.tryContinue();
+    _requestEmailToken = async (...args) => {
+        this.setState({
+            busy: true,
+        });
+        try {
+            return await this.props.requestEmailToken(...args);
+        } finally {
+            this.setState({
+                busy: false,
+            });
         }
-    },
+    };
 
-    _authStateUpdated: function(stageType, stageState) {
+    tryContinue = () => {
+        if (this._stageComponent.current && this._stageComponent.current.tryContinue) {
+            this._stageComponent.current.tryContinue();
+        }
+    };
+
+    _authStateUpdated = (stageType, stageState) => {
         const oldStage = this.state.authStage;
         this.setState({
+            busy: false,
             authStage: stageType,
             stageState: stageState,
             errorText: stageState.error,
         }, () => {
-            if (oldStage != stageType) this._setFocus();
-        });
-    },
-
-    _requestCallback: function(auth, background) {
-        const makeRequestPromise = this.props.makeRequest(auth);
-
-        // if it's a background request, just do it: we don't want
-        // it to affect the state of our UI.
-        if (background) return makeRequestPromise;
-
-        // otherwise, manage the state of the spinner and error messages
-        this.setState({
-            busy: true,
-            errorText: null,
-            stageErrorText: null,
-        });
-        return makeRequestPromise.finally(() => {
-            if (this._unmounted) {
-                return;
+            if (oldStage !== stageType) {
+                this._setFocus();
+            } else if (
+                !stageState.error && this._stageComponent.current &&
+                this._stageComponent.current.attemptFailed
+            ) {
+                this._stageComponent.current.attemptFailed();
             }
-            this.setState({
-                busy: false,
-            });
         });
-    },
+    };
 
-    _setFocus: function() {
-        if (this.refs.stageComponent && this.refs.stageComponent.focus) {
-            this.refs.stageComponent.focus();
+    _requestCallback = (auth) => {
+        // This wrapper just exists because the js-sdk passes a second
+        // 'busy' param for backwards compat. This throws the tests off
+        // so discard it here.
+        return this.props.makeRequest(auth);
+    };
+
+    _onBusyChanged = (busy) => {
+        // if we've started doing stuff, reset the error messages
+        if (busy) {
+            this.setState({
+                busy: true,
+                errorText: null,
+                stageErrorText: null,
+            });
         }
-    },
+        // The JS SDK eagerly reports itself as "not busy" right after any
+        // immediate work has completed, but that's not really what we want at
+        // the UI layer, so we ignore this signal and show a spinner until
+        // there's a new screen to show the user. This is implemented by setting
+        // `busy: false` in `_authStateUpdated`.
+        // See also https://github.com/vector-im/element-web/issues/12546
+    };
 
-    _submitAuthDict: function(authData) {
+    _setFocus() {
+        if (this._stageComponent.current && this._stageComponent.current.focus) {
+            this._stageComponent.current.focus();
+        }
+    }
+
+    _submitAuthDict = authData => {
         this._authLogic.submitAuthDict(authData);
-    },
+    };
 
-    _renderCurrentStage: function() {
+    _onPhaseChange = newPhase => {
+        if (this.props.onStagePhaseChange) {
+            this.props.onStagePhaseChange(this.state.authStage, newPhase || 0);
+        }
+    };
+
+    _onStageCancel = () => {
+        this.props.onAuthFinished(false, ERROR_USER_CANCELLED);
+    };
+
+    _renderCurrentStage() {
         const stage = this.state.authStage;
-        if (!stage) return null;
+        if (!stage) {
+            if (this.state.busy) {
+                const Loader = sdk.getComponent("elements.Spinner");
+                return <Loader />;
+            } else {
+                return null;
+            }
+        }
 
         const StageComponent = getEntryComponentForLoginType(stage);
         return (
-            <StageComponent ref="stageComponent"
+            <StageComponent
+                ref={this._stageComponent}
                 loginType={stage}
                 matrixClient={this.props.matrixClient}
                 authSessionId={this._authLogic.getSessionId()}
@@ -202,20 +261,24 @@ export default React.createClass({
                 stageState={this.state.stageState}
                 fail={this._onAuthStageFailed}
                 setEmailSid={this._setEmailSid}
-                makeRegistrationUrl={this.props.makeRegistrationUrl}
                 showContinue={!this.props.continueIsManaged}
+                onPhaseChange={this._onPhaseChange}
+                continueText={this.props.continueText}
+                continueKind={this.props.continueKind}
+                onCancel={this._onStageCancel}
             />
         );
-    },
+    }
 
-    _onAuthStageFailed: function(e) {
+    _onAuthStageFailed = e => {
         this.props.onAuthFinished(false, e);
-    },
-    _setEmailSid: function(sid) {
-        this._authLogic.setEmailSid(sid);
-    },
+    };
 
-    render: function() {
+    _setEmailSid = sid => {
+        this._authLogic.setEmailSid(sid);
+    };
+
+    render() {
         let error = null;
         if (this.state.errorText) {
             error = (
@@ -233,5 +296,5 @@ export default React.createClass({
                 </div>
             </div>
         );
-    },
-});
+    }
+}

@@ -17,38 +17,36 @@ limitations under the License.
 
 import React from 'react';
 import PropTypes from 'prop-types';
-import sdk from '../../../index';
-import Email from '../../../email';
+import * as sdk from '../../../index';
+import * as Email from '../../../email';
 import AddThreepid from '../../../AddThreepid';
 import { _t } from '../../../languageHandler';
 import Modal from '../../../Modal';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-
-/**
+/*
  * Prompt the user to set an email address.
  *
  * On success, `onFinished(true)` is called.
  */
-export default React.createClass({
-    displayName: 'SetEmailDialog',
-    propTypes: {
+@replaceableComponent("views.dialogs.SetEmailDialog")
+export default class SetEmailDialog extends React.Component {
+    static propTypes = {
         onFinished: PropTypes.func.isRequired,
-    },
+    };
 
-    getInitialState: function() {
-        return {
-            emailAddress: '',
-            emailBusy: false,
-        };
-    },
+    state = {
+        emailAddress: '',
+        emailBusy: false,
+    };
 
-    onEmailAddressChanged: function(value) {
+    onEmailAddressChanged = value => {
         this.setState({
             emailAddress: value,
         });
-    },
+    };
 
-    onSubmit: function() {
+    onSubmit = () => {
         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
         const QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
 
@@ -61,9 +59,7 @@ export default React.createClass({
             return;
         }
         this._addThreepid = new AddThreepid();
-        // we always bind emails when registering, so let's do the
-        // same here.
-        this._addThreepid.addEmailAddress(emailAddress, true).done(() => {
+        this._addThreepid.addEmailAddress(emailAddress).then(() => {
             Modal.createTrackedDialog('Verification Pending', '', QuestionDialog, {
                 title: _t("Verification Pending"),
                 description: _t(
@@ -74,33 +70,33 @@ export default React.createClass({
                 onFinished: this.onEmailDialogFinished,
             });
         }, (err) => {
-            this.setState({emailBusy: false});
+            this.setState({ emailBusy: false });
             console.error("Unable to add email address " + emailAddress + " " + err);
             Modal.createTrackedDialog('Unable to add email address', '', ErrorDialog, {
                 title: _t("Unable to add email address"),
                 description: ((err && err.message) ? err.message : _t("Operation failed")),
             });
         });
-        this.setState({emailBusy: true});
-    },
+        this.setState({ emailBusy: true });
+    };
 
-    onCancelled: function() {
+    onCancelled = () => {
         this.props.onFinished(false);
-    },
+    };
 
-    onEmailDialogFinished: function(ok) {
+    onEmailDialogFinished = ok => {
         if (ok) {
             this.verifyEmailAddress();
         } else {
-            this.setState({emailBusy: false});
+            this.setState({ emailBusy: false });
         }
-    },
+    };
 
-    verifyEmailAddress: function() {
-        this._addThreepid.checkEmailLinkClicked().done(() => {
+    verifyEmailAddress() {
+        this._addThreepid.checkEmailLinkClicked().then(() => {
             this.props.onFinished(true);
         }, (err) => {
-            this.setState({emailBusy: false});
+            this.setState({ emailBusy: false });
             if (err.errcode == 'M_THREEPID_AUTH_FAILED') {
                 const QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
                 const message = _t("Unable to verify email address.") + " " +
@@ -120,9 +116,9 @@ export default React.createClass({
                 });
             }
         });
-    },
+    }
 
-    render: function() {
+    render() {
         const BaseDialog = sdk.getComponent('views.dialogs.BaseDialog');
         const Spinner = sdk.getComponent('elements.Spinner');
         const EditableText = sdk.getComponent('elements.EditableText');
@@ -162,5 +158,5 @@ export default React.createClass({
                 </div>
             </BaseDialog>
         );
-    },
-});
+    }
+}

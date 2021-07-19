@@ -14,18 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-'use strict';
-
 import React from 'react';
 import PropTypes from 'prop-types';
 import * as Roles from '../../../Roles';
 import { _t } from '../../../languageHandler';
 import Field from "./Field";
+import { Key } from "../../../Keyboard";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-module.exports = React.createClass({
-    displayName: 'PowerSelector',
-
-    propTypes: {
+@replaceableComponent("views.elements.PowerSelector")
+export default class PowerSelector extends React.Component {
+    static propTypes = {
         value: PropTypes.number.isRequired,
         // The maximum value that can be set with the power selector
         maxValue: PropTypes.number.isRequired,
@@ -42,10 +41,17 @@ module.exports = React.createClass({
 
         // The name to annotate the selector with
         label: PropTypes.string,
-    },
+    }
 
-    getInitialState: function() {
-        return {
+    static defaultProps = {
+        maxValue: Infinity,
+        usersDefault: 0,
+    };
+
+    constructor(props) {
+        super(props);
+
+        this.state = {
             levelRoleMap: {},
             // List of power levels to show in the drop-down
             options: [],
@@ -53,28 +59,28 @@ module.exports = React.createClass({
             customValue: this.props.value,
             selectValue: 0,
         };
-    },
+    }
 
-    getDefaultProps: function() {
-        return {
-            maxValue: Infinity,
-            usersDefault: 0,
-        };
-    },
-
-    componentWillMount: function() {
+    // TODO: [REACT-WARNING] Replace with appropriate lifecycle event
+    // eslint-disable-next-line camelcase
+    UNSAFE_componentWillMount() {
         this._initStateFromProps(this.props);
-    },
+    }
 
-    componentWillReceiveProps: function(newProps) {
+    // eslint-disable-next-line camelcase
+    UNSAFE_componentWillReceiveProps(newProps) {
         this._initStateFromProps(newProps);
-    },
+    }
 
-    _initStateFromProps: function(newProps) {
+    _initStateFromProps(newProps) {
         // This needs to be done now because levelRoleMap has translated strings
         const levelRoleMap = Roles.levelRoleMap(newProps.usersDefault);
-        const options = Object.keys(levelRoleMap).filter((l) => {
-            return l === undefined || l <= newProps.maxValue;
+        const options = Object.keys(levelRoleMap).filter(level => {
+            return (
+                level === undefined ||
+                level <= newProps.maxValue ||
+                level == newProps.value
+            );
         });
 
         const isCustom = levelRoleMap[newProps.value] === undefined;
@@ -86,31 +92,31 @@ module.exports = React.createClass({
             customLevel: newProps.value,
             selectValue: isCustom ? "SELECT_VALUE_CUSTOM" : newProps.value,
         });
-    },
+    }
 
-    onSelectChange: function(event) {
+    onSelectChange = event => {
         const isCustom = event.target.value === "SELECT_VALUE_CUSTOM";
         if (isCustom) {
-            this.setState({custom: true});
+            this.setState({ custom: true });
         } else {
             this.props.onChange(event.target.value, this.props.powerLevelKey);
-            this.setState({selectValue: event.target.value});
+            this.setState({ selectValue: event.target.value });
         }
-    },
+    };
 
-    onCustomChange: function(event) {
-        this.setState({customValue: event.target.value});
-    },
+    onCustomChange = event => {
+        this.setState({ customValue: event.target.value });
+    };
 
-    onCustomBlur: function(event) {
+    onCustomBlur = event => {
         event.preventDefault();
         event.stopPropagation();
 
         this.props.onChange(parseInt(this.state.customValue), this.props.powerLevelKey);
-    },
+    };
 
-    onCustomKeyPress: function(event) {
-        if (event.key === "Enter") {
+    onCustomKeyDown = event => {
+        if (event.key === Key.ENTER) {
             event.preventDefault();
             event.stopPropagation();
 
@@ -121,16 +127,21 @@ module.exports = React.createClass({
             // handle the onBlur safely.
             event.target.blur();
         }
-    },
+    };
 
-    render: function() {
+    render() {
         let picker;
+        const label = typeof this.props.label === "undefined" ? _t("Power level") : this.props.label;
         if (this.state.custom) {
             picker = (
-                <Field id={`powerSelector_custom_${this.props.powerLevelKey}`} type="number"
-                       label={this.props.label || _t("Power level")} max={this.props.maxValue}
-                       onBlur={this.onCustomBlur} onKeyPress={this.onCustomKeyPress} onChange={this.onCustomChange}
-                       value={this.state.customValue} disabled={this.props.disabled} />
+                <Field type="number"
+                    label={label} max={this.props.maxValue}
+                    onBlur={this.onCustomBlur}
+                    onKeyDown={this.onCustomKeyDown}
+                    onChange={this.onCustomChange}
+                    value={String(this.state.customValue)}
+                    disabled={this.props.disabled}
+                />
             );
         } else {
             // Each level must have a definition in this.state.levelRoleMap
@@ -146,9 +157,10 @@ module.exports = React.createClass({
             });
 
             picker = (
-                <Field id={`powerSelector_notCustom_${this.props.powerLevelKey}`} element="select"
-                       label={this.props.label || _t("Power level")} onChange={this.onSelectChange}
-                       value={this.state.selectValue} disabled={this.props.disabled}>
+                <Field element="select"
+                    label={label} onChange={this.onSelectChange}
+                    value={String(this.state.selectValue)} disabled={this.props.disabled}
+                >
                     {options}
                 </Field>
             );
@@ -159,5 +171,5 @@ module.exports = React.createClass({
                 { picker }
             </div>
         );
-    },
-});
+    }
+}

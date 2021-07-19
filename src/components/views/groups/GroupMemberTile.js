@@ -1,6 +1,7 @@
 /*
 Copyright 2017 Vector Creations Ltd
 Copyright 2017 New Vector Ltd
+Copyright 2019 Michael Telatynski <7t3chguy@gmail.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,44 +18,44 @@ limitations under the License.
 
 import React from 'react';
 import PropTypes from 'prop-types';
-import sdk from '../../../index';
-import dis from '../../../dispatcher';
+import * as sdk from '../../../index';
+import dis from '../../../dispatcher/dispatcher';
 import { GroupMemberType } from '../../../groups';
-import withMatrixClient from '../../../wrappers/withMatrixClient';
+import MatrixClientContext from "../../../contexts/MatrixClientContext";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
+import { mediaFromMxc } from "../../../customisations/Media";
 
-export default withMatrixClient(React.createClass({
-    displayName: 'GroupMemberTile',
-
-    propTypes: {
-        matrixClient: PropTypes.object,
+@replaceableComponent("views.groups.GroupMemberTile")
+export default class GroupMemberTile extends React.Component {
+    static propTypes = {
         groupId: PropTypes.string.isRequired,
         member: GroupMemberType.isRequired,
-    },
+    };
 
-    getInitialState: function() {
-        return {};
-    },
+    static contextType = MatrixClientContext;
 
-    onClick: function(e) {
+    onClick = e => {
         dis.dispatch({
             action: 'view_group_user',
             member: this.props.member,
             groupId: this.props.groupId,
         });
-    },
+    };
 
-    render: function() {
+    render() {
         const BaseAvatar = sdk.getComponent('avatars.BaseAvatar');
         const EntityTile = sdk.getComponent('rooms.EntityTile');
 
         const name = this.props.member.displayname || this.props.member.userId;
-        const avatarUrl = this.props.matrixClient.mxcUrlToHttp(
-            this.props.member.avatarUrl,
-            36, 36, 'crop',
-        );
+        const avatarUrl = this.props.member.avatarUrl
+            ? mediaFromMxc(this.props.member.avatarUrl).getSquareThumbnailHttp(36)
+            : null;
 
         const av = (
-            <BaseAvatar name={this.props.member.userId}
+            <BaseAvatar
+                aria-hidden="true"
+                name={this.props.member.displayname || this.props.member.userId}
+                idName={this.props.member.userId}
                 width={36} height={36}
                 url={avatarUrl}
             />
@@ -66,5 +67,5 @@ export default withMatrixClient(React.createClass({
                 powerStatus={this.props.member.isPrivileged ? EntityTile.POWER_STATUS_ADMIN : null}
             />
         );
-    },
-}));
+    }
+}

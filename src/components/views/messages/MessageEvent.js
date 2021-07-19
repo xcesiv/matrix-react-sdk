@@ -14,16 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-'use strict';
-
-const React = require('react');
+import React, { createRef } from 'react';
 import PropTypes from 'prop-types';
-const sdk = require('../../../index');
+import * as sdk from '../../../index';
+import SettingsStore from "../../../settings/SettingsStore";
+import { Mjolnir } from "../../../mjolnir/Mjolnir";
+import RedactedBody from "./RedactedBody";
+import UnknownBody from "./UnknownBody";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-module.exports = React.createClass({
-    displayName: 'MessageEvent',
-
-    propTypes: {
+@replaceableComponent("views.messages.MessageEvent")
+export default class MessageEvent extends React.Component {
+    static propTypes = {
         /* the MatrixEvent to show */
         mxEvent: PropTypes.object.isRequired,
 
@@ -40,36 +42,54 @@ module.exports = React.createClass({
         onHeightChanged: PropTypes.func,
 
         /* the shape of the tile, used */
-        tileShape: PropTypes.string,
+        tileShape: PropTypes.string, // TODO: Use TileShape enum
 
         /* the maximum image height to use, if the event is an image */
         maxImageHeight: PropTypes.number,
-    },
 
-    getEventTileOps: function() {
-        return this.refs.body && this.refs.body.getEventTileOps ? this.refs.body.getEventTileOps() : null;
-    },
+        /* overrides for the msgtype-specific components, used by ReplyTile to override file rendering */
+        overrideBodyTypes: PropTypes.object,
+        overrideEventTypes: PropTypes.object,
 
-    render: function() {
-        const UnknownBody = sdk.getComponent('messages.UnknownBody');
+        /* the permalinkCreator */
+        permalinkCreator: PropTypes.object,
+    };
 
+    constructor(props) {
+        super(props);
+
+        this._body = createRef();
+    }
+
+    getEventTileOps = () => {
+        return this._body.current && this._body.current.getEventTileOps ? this._body.current.getEventTileOps() : null;
+    };
+
+    onTileUpdate = () => {
+        this.forceUpdate();
+    };
+
+    render() {
         const bodyTypes = {
             'm.text': sdk.getComponent('messages.TextualBody'),
             'm.notice': sdk.getComponent('messages.TextualBody'),
             'm.emote': sdk.getComponent('messages.TextualBody'),
             'm.image': sdk.getComponent('messages.MImageBody'),
             'm.file': sdk.getComponent('messages.MFileBody'),
-            'm.audio': sdk.getComponent('messages.MAudioBody'),
+            'm.audio': sdk.getComponent('messages.MVoiceOrAudioBody'),
             'm.video': sdk.getComponent('messages.MVideoBody'),
+
+            ...(this.props.overrideBodyTypes || {}),
         };
         const evTypes = {
             'm.sticker': sdk.getComponent('messages.MStickerBody'),
+            ...(this.props.overrideEventTypes || {}),
         };
 
         const content = this.props.mxEvent.getContent();
         const type = this.props.mxEvent.getType();
         const msgtype = content.msgtype;
-        let BodyType = UnknownBody;
+        let BodyType = RedactedBody;
         if (!this.props.mxEvent.isRedacted()) {
             // only resolve BodyType if event is not redacted
             if (type && evTypes[type]) {
@@ -79,16 +99,40 @@ module.exports = React.createClass({
             } else if (content.url) {
                 // Fallback to MFileBody if there's a content URL
                 BodyType = bodyTypes['m.file'];
+            } else {
+                // Fallback to UnknownBody otherwise if not redacted
+                BodyType = UnknownBody;
             }
         }
 
-        return <BodyType
-            ref="body" mxEvent={this.props.mxEvent}
+        if (SettingsStore.getValue("feature_mjolnir")) {
+            const key = `mx_mjolnir_render_${this.props.mxEvent.getRoomId()}__${this.props.mxEvent.getId()}`;
+            const allowRender = localStorage.getItem(key) === "true";
+
+            if (!allowRender) {
+                const userDomain = this.props.mxEvent.getSender().split(':').slice(1).join(':');
+                const userBanned = Mjolnir.sharedInstance().isUserBanned(this.props.mxEvent.getSender());
+                const serverBanned = Mjolnir.sharedInstance().isServerBanned(userDomain);
+
+                if (userBanned || serverBanned) {
+                    BodyType = sdk.getComponent('messages.MjolnirBody');
+                }
+            }
+        }
+
+        return BodyType ? <BodyType
+            ref={this._body}
+            mxEvent={this.props.mxEvent}
             highlights={this.props.highlights}
             highlightLink={this.props.highlightLink}
             showUrlPreview={this.props.showUrlPreview}
             tileShape={this.props.tileShape}
             maxImageHeight={this.props.maxImageHeight}
-            onHeightChanged={this.props.onHeightChanged} />;
-    },
-});
+            replacingEventId={this.props.replacingEventId}
+            editState={this.props.editState}
+            onHeightChanged={this.props.onHeightChanged}
+            onMessageAllowed={this.onTileUpdate}
+            permalinkCreator={this.props.permalinkCreator}
+        /> : null;
+    }
+}

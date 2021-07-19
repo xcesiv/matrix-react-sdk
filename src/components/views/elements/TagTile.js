@@ -1,6 +1,7 @@
 /*
 Copyright 2017 New Vector Ltd.
 Copyright 2018 Michael Telatynski <7t3chguy@gmail.com>
+Copyright 2019 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,45 +19,47 @@ limitations under the License.
 import React from 'react';
 import PropTypes from 'prop-types';
 import classNames from 'classnames';
-import { MatrixClient } from 'matrix-js-sdk';
-import sdk from '../../../index';
-import dis from '../../../dispatcher';
+import * as sdk from '../../../index';
+import dis from '../../../dispatcher/dispatcher';
 import { isOnlyCtrlOrCmdIgnoreShiftKeyEvent } from '../../../Keyboard';
-import * as ContextualMenu from '../../structures/ContextualMenu';
 import * as FormattingUtils from '../../../utils/FormattingUtils';
 
 import FlairStore from '../../../stores/FlairStore';
 import GroupStore from '../../../stores/GroupStore';
-import TagOrderStore from '../../../stores/TagOrderStore';
+import GroupFilterOrderStore from '../../../stores/GroupFilterOrderStore';
+import MatrixClientContext from "../../../contexts/MatrixClientContext";
+import AccessibleButton from "./AccessibleButton";
+import SettingsStore from "../../../settings/SettingsStore";
+import { mediaFromMxc } from "../../../customisations/Media";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-// A class for a child of TagPanel (possibly wrapped in a DNDTagTile) that represents
+// A class for a child of GroupFilterPanel (possibly wrapped in a DNDTagTile) that represents
 // a thing to click on for the user to filter the visible rooms in the RoomList to:
 //  - Rooms that are part of the group
 //  - Direct messages with members of the group
 // with the intention that this could be expanded to arbitrary tags in future.
-export default React.createClass({
-    displayName: 'TagTile',
-
-    propTypes: {
+@replaceableComponent("views.elements.TagTile")
+export default class TagTile extends React.Component {
+    static propTypes = {
         // A string tag such as "m.favourite" or a group ID such as "+groupid:domain.bla"
         // For now, only group IDs are handled.
         tag: PropTypes.string,
-    },
+        contextMenuButtonRef: PropTypes.object,
+        openMenu: PropTypes.func,
+        menuDisplayed: PropTypes.bool,
+        selected: PropTypes.bool,
+    };
 
-    contextTypes: {
-        matrixClient: PropTypes.instanceOf(MatrixClient).isRequired,
-    },
+    static contextType = MatrixClientContext;
 
-    getInitialState() {
-        return {
-            // Whether the mouse is over the tile
-            hover: false,
-            // The profile data of the group if this.props.tag is a group ID
-            profile: null,
-        };
-    },
+    state = {
+        // Whether the mouse is over the tile
+        hover: false,
+        // The profile data of the group if this.props.tag is a group ID
+        profile: null,
+    };
 
-    componentWillMount() {
+    componentDidMount() {
         this.unmounted = false;
         if (this.props.tag[0] === '+') {
             FlairStore.addListener('updateGroupProfile', this._onFlairStoreUpdated);
@@ -64,34 +67,34 @@ export default React.createClass({
             // New rooms or members may have been added to the group, fetch async
             this._refreshGroup(this.props.tag);
         }
-    },
+    }
 
     componentWillUnmount() {
         this.unmounted = true;
         if (this.props.tag[0] === '+') {
             FlairStore.removeListener('updateGroupProfile', this._onFlairStoreUpdated);
         }
-    },
+    }
 
-    _onFlairStoreUpdated() {
+    _onFlairStoreUpdated = () => {
         if (this.unmounted) return;
         FlairStore.getGroupProfileCached(
-            this.context.matrixClient,
+            this.context,
             this.props.tag,
         ).then((profile) => {
             if (this.unmounted) return;
-            this.setState({profile});
+            this.setState({ profile });
         }).catch((err) => {
             console.warn('Could not fetch group profile for ' + this.props.tag, err);
         });
-    },
+    };
 
     _refreshGroup(groupId) {
         GroupStore.refreshGroupRooms(groupId);
         GroupStore.refreshGroupMembers(groupId);
-    },
+    }
 
-    onClick: function(e) {
+    onClick = e => {
         e.preventDefault();
         e.stopPropagation();
         dis.dispatch({
@@ -104,75 +107,47 @@ export default React.createClass({
             // New rooms or members may have been added to the group, fetch async
             this._refreshGroup(this.props.tag);
         }
-    },
+    };
 
-    _openContextMenu: function(x, y, chevronOffset) {
-        // Hide the (...) immediately
+    onMouseOver = () => {
+        if (SettingsStore.getValue("feature_communities_v2_prototypes")) return;
+        this.setState({ hover: true });
+    };
+
+    onMouseLeave = () => {
         this.setState({ hover: false });
+    };
 
-        const TagTileContextMenu = sdk.getComponent('context_menus.TagTileContextMenu');
-        ContextualMenu.createMenu(TagTileContextMenu, {
-            chevronOffset: chevronOffset,
-            left: x,
-            top: y,
-            tag: this.props.tag,
-            onFinished: () => {
-                this.setState({ menuDisplayed: false });
-            },
-        });
-        this.setState({ menuDisplayed: true });
-    },
-
-    onContextButtonClick: function(e) {
-        e.preventDefault();
+    openMenu = e => {
+        // Prevent the TagTile onClick event firing as well
         e.stopPropagation();
-
-        const elementRect = e.target.getBoundingClientRect();
-
-        // The window X and Y offsets are to adjust position when zoomed in to page
-        const x = elementRect.right + window.pageXOffset + 3;
-        const chevronOffset = 12;
-        let y = (elementRect.top + (elementRect.height / 2) + window.pageYOffset);
-        y = y - (chevronOffset + 8); // where 8 is half the height of the chevron
-
-        this._openContextMenu(x, y, chevronOffset);
-    },
-
-    onContextMenu: function(e) {
         e.preventDefault();
+        if (SettingsStore.getValue("feature_communities_v2_prototypes")) return;
+        this.setState({ hover: false });
+        this.props.openMenu();
+    };
 
-        const chevronOffset = 12;
-        this._openContextMenu(e.clientX, e.clientY - (chevronOffset + 8), chevronOffset);
-    },
-
-    onMouseOver: function() {
-        this.setState({hover: true});
-    },
-
-    onMouseOut: function() {
-        this.setState({hover: false});
-    },
-
-    render: function() {
+    render() {
         const BaseAvatar = sdk.getComponent('avatars.BaseAvatar');
-        const AccessibleButton = sdk.getComponent('elements.AccessibleButton');
-        const Tooltip = sdk.getComponent('elements.Tooltip');
         const profile = this.state.profile || {};
         const name = profile.name || this.props.tag;
-        const avatarHeight = 40;
+        const avatarSize = 32;
 
-        const httpUrl = profile.avatarUrl ? this.context.matrixClient.mxcUrlToHttp(
-            profile.avatarUrl, avatarHeight, avatarHeight, "crop",
-        ) : null;
+        const httpUrl = profile.avatarUrl
+            ? mediaFromMxc(profile.avatarUrl).getSquareThumbnailHttp(avatarSize)
+            : null;
 
+        const isPrototype = SettingsStore.getValue("feature_communities_v2_prototypes");
         const className = classNames({
             mx_TagTile: true,
-            mx_TagTile_selected: this.props.selected,
+            mx_TagTile_prototype: isPrototype,
+            mx_TagTile_selected: this.props.selected && !isPrototype,
+            mx_TagTile_selected_prototype: this.props.selected && isPrototype,
         });
 
-        const badge = TagOrderStore.getGroupBadge(this.props.tag);
+        const badge = GroupFilterOrderStore.getGroupBadge(this.props.tag);
         let badgeElement;
-        if (badge && !this.state.hover) {
+        if (badge && !this.state.hover && !this.props.menuDisplayed) {
             const badgeClasses = classNames({
                 "mx_TagTile_badge": true,
                 "mx_TagTile_badgeHighlight": badge.highlight,
@@ -180,26 +155,38 @@ export default React.createClass({
             badgeElement = (<div className={badgeClasses}>{FormattingUtils.formatCount(badge.count)}</div>);
         }
 
-        const tip = this.state.hover ?
-            <Tooltip className="mx_TagTile_tooltip" label={name} /> :
-            <div />;
-        const contextButton = this.state.hover || this.state.menuDisplayed ?
-            <div className="mx_TagTile_context_button" onClick={this.onContextButtonClick}>
-                { "\u00B7\u00B7\u00B7" }
-            </div> : <div />;
-        return <AccessibleButton className={className} onClick={this.onClick} onContextMenu={this.onContextMenu}>
-            <div className="mx_TagTile_avatar" onMouseOver={this.onMouseOver} onMouseOut={this.onMouseOut}>
+        const contextButton = this.state.hover || this.props.menuDisplayed ?
+            <AccessibleButton
+                className="mx_TagTile_context_button"
+                onClick={this.openMenu}
+                inputRef={this.props.contextMenuButtonRef}
+            >
+                {"\u00B7\u00B7\u00B7"}
+            </AccessibleButton> : <div ref={this.props.contextMenuButtonRef} />;
+
+        const AccessibleTooltipButton = sdk.getComponent("elements.AccessibleTooltipButton");
+
+        return <AccessibleTooltipButton
+            className={className}
+            onClick={this.onClick}
+            onContextMenu={this.openMenu}
+            title={name}
+        >
+            <div
+                className="mx_TagTile_avatar"
+                onMouseOver={this.onMouseOver}
+                onMouseLeave={this.onMouseLeave}
+            >
                 <BaseAvatar
                     name={name}
                     idName={this.props.tag}
                     url={httpUrl}
-                    width={avatarHeight}
-                    height={avatarHeight}
+                    width={avatarSize}
+                    height={avatarSize}
                 />
-                { tip }
-                { contextButton }
-                { badgeElement }
+                {contextButton}
+                {badgeElement}
             </div>
-        </AccessibleButton>;
-    },
-});
+        </AccessibleTooltipButton>;
+    }
+}

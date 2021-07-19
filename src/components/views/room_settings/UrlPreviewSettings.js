@@ -1,7 +1,8 @@
 /*
 Copyright 2016 OpenMarket Ltd
 Copyright 2017 Travis Ralston
-Copyright 2018-2019 New Vector Ltd
+Copyright 2018, 2019 New Vector Ltd
+Copyright 2019 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,29 +17,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-const React = require('react');
+import React from 'react';
 import PropTypes from 'prop-types';
-const sdk = require("../../../index");
+import * as sdk from "../../../index";
 import { _t, _td } from '../../../languageHandler';
-import SettingsStore, {SettingLevel} from "../../../settings/SettingsStore";
-import dis from "../../../dispatcher";
-import MatrixClientPeg from "../../../MatrixClientPeg";
+import SettingsStore from "../../../settings/SettingsStore";
+import dis from "../../../dispatcher/dispatcher";
+import { MatrixClientPeg } from "../../../MatrixClientPeg";
+import { Action } from "../../../dispatcher/actions";
+import { SettingLevel } from "../../../settings/SettingLevel";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-
-module.exports = React.createClass({
-    displayName: 'UrlPreviewSettings',
-
-    propTypes: {
+@replaceableComponent("views.room_settings.UrlPreviewSettings")
+export default class UrlPreviewSettings extends React.Component {
+    static propTypes = {
         room: PropTypes.object,
-    },
+    };
 
-    _onClickUserSettings: (e) => {
+    _onClickUserSettings = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        dis.dispatch({action: 'view_user_settings'});
-    },
+        dis.fire(Action.ViewUserSettings);
+    };
 
-    render: function() {
+    render() {
         const SettingsFlag = sdk.getComponent("elements.SettingsFlag");
         const roomId = this.props.room.roomId;
         const isEncrypted = MatrixClientPeg.get().isRoomEncrypted(roomId);
@@ -55,7 +57,7 @@ module.exports = React.createClass({
                         'a': (sub)=><a onClick={this._onClickUserSettings} href=''>{ sub }</a>,
                     })
                 );
-            } else if (accountEnabled) {
+            } else {
                 previewsForAccount = (
                     _t("You have <a>disabled</a> URL previews by default.", {}, {
                         'a': (sub)=><a onClick={this._onClickUserSettings} href=''>{ sub }</a>,
@@ -66,10 +68,12 @@ module.exports = React.createClass({
             if (SettingsStore.canSetValue("urlPreviewsEnabled", roomId, "room")) {
                 previewsForRoom = (
                     <label>
-                        <SettingsFlag name="urlPreviewsEnabled"
-                                      level={SettingLevel.ROOM}
-                                      roomId={roomId}
-                                      isExplicit={true} />
+                        <SettingsFlag
+                            name="urlPreviewsEnabled"
+                            level={SettingLevel.ROOM}
+                            roomId={roomId}
+                            isExplicit={true}
+                        />
                     </label>
                 );
             } else {
@@ -89,8 +93,8 @@ module.exports = React.createClass({
 
         const previewsForRoomAccount = ( // in an e2ee room we use a special key to enforce per-room opt-in
             <SettingsFlag name={isEncrypted ? 'urlPreviewsEnabled_e2ee' : 'urlPreviewsEnabled'}
-                          level={SettingLevel.ROOM_ACCOUNT}
-                          roomId={roomId} />
+                level={SettingLevel.ROOM_ACCOUNT}
+                roomId={roomId} />
         );
 
         return (
@@ -106,5 +110,5 @@ module.exports = React.createClass({
                 <label>{ previewsForRoomAccount }</label>
             </div>
         );
-    },
-});
+    }
+}

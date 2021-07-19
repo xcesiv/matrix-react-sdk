@@ -18,6 +18,8 @@ limitations under the License.
 
 .mx_Field {
     display: flex;
+    flex: 1;
+    min-width: 0;
     position: relative;
     margin: 1em 0;
     border-radius: 4px;
@@ -29,12 +31,16 @@ limitations under the License.
     border-right: 1px solid $input-border-color;
 }
 
+.mx_Field_postfix {
+    border-left: 1px solid $input-border-color;
+}
+
 .mx_Field input,
 .mx_Field select,
 .mx_Field textarea {
     font-weight: normal;
     font-family: $font-family;
-    font-size: 14px;
+    font-size: $font-14px;
     border: none;
     // Even without a border here, we still need this avoid overlapping the rounded
     // corners on the field above.
@@ -42,6 +48,8 @@ limitations under the License.
     padding: 8px 9px;
     color: $primary-fg-color;
     background-color: $primary-bg-color;
+    flex: 1;
+    min-width: 0;
 }
 
 .mx_Field select {
@@ -94,7 +102,7 @@ limitations under the License.
         background-color 0.25s ease-out 0.1s;
     color: $primary-fg-color;
     background-color: transparent;
-    font-size: 14px;
+    font-size: $font-14px;
     position: absolute;
     left: 0px;
     top: 0px;
@@ -107,18 +115,18 @@ limitations under the License.
     max-width: calc(100% - 20px); // 100% of parent minus margin and padding
 }
 
+.mx_Field_labelAlwaysTopLeft label,
+.mx_Field select + label /* Always show a select's label on top to not collide with the value */,
 .mx_Field input:focus + label,
 .mx_Field input:not(:placeholder-shown) + label,
 .mx_Field textarea:focus + label,
-.mx_Field textarea:not(:placeholder-shown) + label,
-.mx_Field select + label /* Always show a select's label on top to not collide with the value */,
-.mx_Field_labelAlwaysTopLeft label {
+.mx_Field textarea:not(:placeholder-shown) + label {
     transition:
         font-size 0.25s ease-out 0s,
         color 0.25s ease-out 0s,
         top 0.25s ease-out 0s,
         background-color 0.25s ease-out 0s;
-    font-size: 10px;
+    font-size: $font-10px;
     top: -13px;
     padding: 0 2px;
     background-color: $field-focused-label-bg-color;
@@ -168,6 +176,7 @@ limitations under the License.
 .mx_Field_tooltip {
     margin-top: -12px;
     margin-left: 4px;
+    width: 200px;
 }
 
 .mx_Field_tooltip.mx_Field_valid {
@@ -182,5 +191,5 @@ limitations under the License.
 }
 
 .mx_Field .mx_CountryDropdown {
-    width: 67px;
+    width: $font-78px;
 }
