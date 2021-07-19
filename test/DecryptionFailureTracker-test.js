@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import expect from 'expect';
-
 import { DecryptionFailure, DecryptionFailureTracker } from '../src/DecryptionFailureTracker';
 
 import { MatrixEvent } from 'matrix-js-sdk';
@@ -32,9 +30,7 @@ function createFailedDecryptionEvent() {
     const event = new MatrixEvent({
         event_id: "event-id-" + Math.random().toString(16).slice(2),
     });
-    event._setClearData(
-        event._badEncryptedMessage(":("),
-    );
+    event.setClearData(event.badEncryptedMessage(":("));
     return event;
 }
 
@@ -69,7 +65,7 @@ describe('DecryptionFailureTracker', function() {
         tracker.eventDecrypted(decryptedEvent, err);
 
         // Indicate successful decryption: clear data can be anything where the msgtype is not m.bad.encrypted
-        decryptedEvent._setClearData({});
+        decryptedEvent.setClearData({});
         tracker.eventDecrypted(decryptedEvent, null);
 
         // Pretend "now" is Infinity

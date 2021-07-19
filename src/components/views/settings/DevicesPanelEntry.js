@@ -17,14 +17,17 @@ limitations under the License.
 import React from 'react';
 import PropTypes from 'prop-types';
 
-import sdk from '../../../index';
+import * as sdk from '../../../index';
 import { _t } from '../../../languageHandler';
-import MatrixClientPeg from '../../../MatrixClientPeg';
-import {formatDate} from '../../../DateUtils';
+import { MatrixClientPeg } from '../../../MatrixClientPeg';
+import { formatDate } from '../../../DateUtils';
+import StyledCheckbox from '../elements/StyledCheckbox';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
+@replaceableComponent("views.settings.DevicesPanelEntry")
 export default class DevicesPanelEntry extends React.Component {
-    constructor(props, context) {
-        super(props, context);
+    constructor(props) {
+        super(props);
 
         this._unmounted = false;
         this.onDeviceToggled = this.onDeviceToggled.bind(this);
@@ -40,7 +43,7 @@ export default class DevicesPanelEntry extends React.Component {
         return MatrixClientPeg.get().setDeviceDetails(device.device_id, {
             display_name: value,
         }).catch((e) => {
-            console.error("Error setting device display name", e);
+            console.error("Error setting session display name", e);
             throw new Error(_t("Failed to set display name"));
         });
     }
@@ -81,7 +84,7 @@ export default class DevicesPanelEntry extends React.Component {
                     { lastSeen }
                 </div>
                 <div className="mx_DevicesPanel_deviceButtons">
-                    <input type="checkbox" onClick={this.onDeviceToggled} checked={this.props.selected} />
+                    <StyledCheckbox onChange={this.onDeviceToggled} checked={this.props.selected} />
                 </div>
             </div>
         );

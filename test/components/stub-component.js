@@ -1,20 +1,20 @@
 /* A dummy React component which we use for stubbing out app-level components
  */
-'use strict';
 
-const React = require('react');
+import React from 'react';
 
-module.exports = function(opts) {
-    opts = opts || {};
-    if (!opts.displayName) {
-        opts.displayName = 'StubComponent';
-    }
-
-    if (!opts.render) {
-        opts.render = function() {
-            return <div>{ this.displayName }</div>;
+export default function({ displayName = "StubComponent", render } = {}) {
+    if (!render) {
+        render = function() {
+            return <div>{ displayName }</div>;
         };
     }
 
-    return React.createClass(opts);
-};
+    return class extends React.Component {
+        static displayName = displayName;
+
+        render() {
+            return render();
+        }
+    };
+}

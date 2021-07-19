@@ -16,49 +16,49 @@ limitations under the License.
 
 import React from 'react';
 import PropTypes from 'prop-types';
-import sdk from '../../../index';
-import MatrixClientPeg from '../../../MatrixClientPeg';
+import * as sdk from '../../../index';
+import { MatrixClientPeg } from '../../../MatrixClientPeg';
 import Modal from '../../../Modal';
 import { _t } from '../../../languageHandler';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-export default React.createClass({
-    displayName: 'RoomUpgradeDialog',
-
-    propTypes: {
+@replaceableComponent("views.dialogs.RoomUpgradeDialog")
+export default class RoomUpgradeDialog extends React.Component {
+    static propTypes = {
         room: PropTypes.object.isRequired,
         onFinished: PropTypes.func.isRequired,
-    },
+    };
 
-    componentWillMount: async function() {
+    state = {
+        busy: true,
+    };
+
+    async componentDidMount() {
         const recommended = await this.props.room.getRecommendedVersion();
         this._targetVersion = recommended.version;
-        this.setState({busy: false});
-    },
+        this.setState({ busy: false });
+    }
 
-    getInitialState: function() {
-        return {
-            busy: true,
-        };
-    },
-
-    _onCancelClick: function() {
+    _onCancelClick = () => {
         this.props.onFinished(false);
-    },
+    };
 
-    _onUpgradeClick: function() {
-        this.setState({busy: true});
-        MatrixClientPeg.get().upgradeRoom(this.props.room.roomId, this._targetVersion).catch((err) => {
+    _onUpgradeClick = () => {
+        this.setState({ busy: true });
+        MatrixClientPeg.get().upgradeRoom(this.props.room.roomId, this._targetVersion).then(() => {
+            this.props.onFinished(true);
+        }).catch((err) => {
             const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
             Modal.createTrackedDialog('Failed to upgrade room', '', ErrorDialog, {
                 title: _t("Failed to upgrade room"),
                 description: ((err && err.message) ? err.message : _t("The room upgrade could not be completed")),
             });
         }).finally(() => {
-            this.setState({busy: false});
+            this.setState({ busy: false });
         });
-    },
+    };
 
-    render: function() {
+    render() {
         const BaseDialog = sdk.getComponent('views.dialogs.BaseDialog');
         const DialogButtons = sdk.getComponent('views.elements.DialogButtons');
         const Spinner = sdk.getComponent('views.elements.Spinner');
@@ -70,7 +70,7 @@ export default React.createClass({
             buttons = <DialogButtons
                 primaryButton={_t(
                     'Upgrade this room to version %(version)s',
-                    {version: this._targetVersion},
+                    { version: this._targetVersion },
                 )}
                 primaryButtonClass="danger"
                 hasCancel={true}
@@ -82,16 +82,15 @@ export default React.createClass({
 
         return (
             <BaseDialog className="mx_RoomUpgradeDialog"
-                onFinished={this.onCancelled}
+                onFinished={this.props.onFinished}
                 title={_t("Upgrade Room Version")}
                 contentId='mx_Dialog_content'
-                onFinished={this.props.onFinished}
                 hasCancel={true}
             >
                 <p>
                     {_t(
                         "Upgrading this room requires closing down the current " +
-                        "instance of the room and creating a new room it its place. " +
+                        "instance of the room and creating a new room in its place. " +
                         "To give room members the best possible experience, we will:",
                     )}
                 </p>
@@ -104,5 +103,5 @@ export default React.createClass({
                 {buttons}
             </BaseDialog>
         );
-    },
-});
+    }
+}

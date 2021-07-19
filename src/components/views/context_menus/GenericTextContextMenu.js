@@ -14,13 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-'use strict';
-
 import React from 'react';
 import PropTypes from 'prop-types';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
+@replaceableComponent("views.context_menus.GenericTextContextMenu")
 export default class GenericTextContextMenu extends React.Component {
-    static PropTypes = {
+    static propTypes = {
         message: PropTypes.string.isRequired,
     };
 

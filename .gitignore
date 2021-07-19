@@ -2,6 +2,7 @@
 /*.log
 package-lock.json
 
+/coverage
 /node_modules
 /lib
 
@@ -9,10 +10,11 @@ package-lock.json
 /git-revision.txt
 /matrix-react-sdk-*.tgz
 
-# test reports created by karma
-/karma-reports
-
 /.idea
 /src/component-index.js
 
 .DS_Store
+*.tmp
+
+.vscode
+.vscode/

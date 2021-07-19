@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import expect from 'expect';
-
 import QueryMatcher from '../../src/autocomplete/QueryMatcher';
 
 const OBJECTS = [
@@ -33,7 +31,7 @@ const NONWORDOBJECTS = [
 
 describe('QueryMatcher', function() {
     it('Returns results by key', function() {
-        const qm = new QueryMatcher(OBJECTS, {keys: ["name"]});
+        const qm = new QueryMatcher(OBJECTS, { keys: ["name"] });
         const results = qm.match('Geri');
 
         expect(results.length).toBe(1);
@@ -41,7 +39,7 @@ describe('QueryMatcher', function() {
     });
 
     it('Returns results by prefix', function() {
-        const qm = new QueryMatcher(OBJECTS, {keys: ["name"]});
+        const qm = new QueryMatcher(OBJECTS, { keys: ["name"] });
         const results = qm.match('Ge');
 
         expect(results.length).toBe(1);
@@ -49,7 +47,7 @@ describe('QueryMatcher', function() {
     });
 
     it('Matches case-insensitive', function() {
-        const qm = new QueryMatcher(OBJECTS, {keys: ["name"]});
+        const qm = new QueryMatcher(OBJECTS, { keys: ["name"] });
         const results = qm.match('geri');
 
         expect(results.length).toBe(1);
@@ -57,7 +55,7 @@ describe('QueryMatcher', function() {
     });
 
     it('Matches ignoring accents', function() {
-        const qm = new QueryMatcher([{name: "Gëri", foo: 46}], {keys: ["name"]});
+        const qm = new QueryMatcher([{ name: "Gëri", foo: 46 }], { keys: ["name"] });
         const results = qm.match('geri');
 
         expect(results.length).toBe(1);
@@ -65,13 +63,12 @@ describe('QueryMatcher', function() {
     });
 
     it('Returns multiple results in order of search string appearance', function() {
-        const qm = new QueryMatcher(OBJECTS, {keys: ["name", "nick"]});
+        const qm = new QueryMatcher(OBJECTS, { keys: ["name", "nick"] });
         const results = qm.match('or');
 
         expect(results.length).toBe(2);
         expect(results[0].name).toBe('Mel C');
         expect(results[1].name).toBe('Victoria');
-
 
         qm.setObjects(OBJECTS.slice().reverse());
         const reverseResults = qm.match('or');
@@ -83,14 +80,39 @@ describe('QueryMatcher', function() {
         expect(reverseResults[1].name).toBe('Victoria');
     });
 
-    it('Returns results with search string in same place in insertion order', function() {
-        const qm = new QueryMatcher(OBJECTS, {keys: ["name"]});
+    it('Returns results with search string in same place according to key index', function() {
+        const objects = [
+            { name: "a", first: "hit", second: "miss", third: "miss" },
+            { name: "b", first: "miss", second: "hit", third: "miss" },
+            { name: "c", first: "miss", second: "miss", third: "hit" },
+        ];
+        const qm = new QueryMatcher(objects, { keys: ["second", "first", "third"] });
+        const results = qm.match('hit');
+
+        expect(results.length).toBe(3);
+        expect(results[0].name).toBe('b');
+        expect(results[1].name).toBe('a');
+        expect(results[2].name).toBe('c');
+
+        qm.setObjects(objects.slice().reverse());
+
+        const reverseResults = qm.match('hit');
+
+        // should still be in the same order: key index
+        // takes precedence over input order
+        expect(reverseResults.length).toBe(3);
+        expect(reverseResults[0].name).toBe('b');
+        expect(reverseResults[1].name).toBe('a');
+        expect(reverseResults[2].name).toBe('c');
+    });
+
+    it('Returns results with search string in same place and key in same place in insertion order', function() {
+        const qm = new QueryMatcher(OBJECTS, { keys: ["name"] });
         const results = qm.match('Mel');
 
         expect(results.length).toBe(2);
         expect(results[0].name).toBe('Mel B');
         expect(results[1].name).toBe('Mel C');
-
 
         qm.setObjects(OBJECTS.slice().reverse());
 
@@ -104,9 +126,9 @@ describe('QueryMatcher', function() {
     it('Returns numeric results in correct order (input pos)', function() {
         // regression test for depending on object iteration order
         const qm = new QueryMatcher([
-            {name: "123456badger"},
-            {name: "123456"},
-        ], {keys: ["name"]});
+            { name: "123456badger" },
+            { name: "123456" },
+        ], { keys: ["name"] });
         const results = qm.match('123456');
 
         expect(results.length).toBe(2);
@@ -116,9 +138,9 @@ describe('QueryMatcher', function() {
 
     it('Returns numeric results in correct order (query pos)', function() {
         const qm = new QueryMatcher([
-            {name: "999999123456"},
-            {name: "123456badger"},
-        ], {keys: ["name"]});
+            { name: "999999123456" },
+            { name: "123456badger" },
+        ], { keys: ["name"] });
         const results = qm.match('123456');
 
         expect(results.length).toBe(2);
@@ -134,9 +156,9 @@ describe('QueryMatcher', function() {
 
         const results = qm.match('Emma');
         expect(results.length).toBe(3);
-        expect(results[0].name).toBe('Mel B');
-        expect(results[1].name).toBe('Mel C');
-        expect(results[2].name).toBe('Emma');
+        expect(results[0].name).toBe('Emma');
+        expect(results[1].name).toBe('Mel B');
+        expect(results[2].name).toBe('Mel C');
     });
 
     it('Matches words only by default', function() {
@@ -152,24 +174,10 @@ describe('QueryMatcher', function() {
         const qm = new QueryMatcher(NONWORDOBJECTS, {
             keys: ["name"],
             shouldMatchWordsOnly: false,
-         });
+        });
 
         const results = qm.match('bob');
         expect(results.length).toBe(1);
         expect(results[0].name).toBe('bob');
-    });
-
-    it('Matches only by prefix with shouldMatchPrefix on', function() {
-        const qm = new QueryMatcher([
-            {name: "Victoria"},
-            {name: "Tori"},
-        ], {
-            keys: ["name"],
-            shouldMatchPrefix: true,
-         });
-
-        const results = qm.match('tori');
-        expect(results.length).toBe(1);
-        expect(results[0].name).toBe('Tori');
     });
 });

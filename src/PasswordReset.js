@@ -1,5 +1,6 @@
 /*
 Copyright 2015, 2016 OpenMarket Ltd
+Copyright 2019 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import * as Matrix from 'matrix-js-sdk';
+import { createClient } from 'matrix-js-sdk/src/matrix';
 import { _t } from './languageHandler';
 
 /**
@@ -24,19 +25,19 @@ import { _t } from './languageHandler';
  * the client owns the given email address, which is then passed to the password
  * API on the homeserver in question with the new password.
  */
-class PasswordReset {
+export default class PasswordReset {
     /**
      * Configure the endpoints for password resetting.
      * @param {string} homeserverUrl The URL to the HS which has the account to reset.
      * @param {string} identityUrl The URL to the IS which has linked the email -> mxid mapping.
      */
     constructor(homeserverUrl, identityUrl) {
-        this.client = Matrix.createClient({
+        this.client = createClient({
             baseUrl: homeserverUrl,
             idBaseUrl: identityUrl,
         });
         this.clientSecret = this.client.generateClientSecret();
-        this.identityServerDomain = identityUrl.split("://")[1];
+        this.identityServerDomain = identityUrl ? identityUrl.split("://")[1] : null;
     }
 
     /**
@@ -53,7 +54,7 @@ class PasswordReset {
             return res;
         }, function(err) {
             if (err.errcode === 'M_THREEPID_NOT_FOUND') {
-                 err.message = _t('This email address was not found');
+                err.message = _t('This email address was not found');
             } else if (err.httpStatus) {
                 err.message = err.message + ` (Status ${err.httpStatus})`;
             }
@@ -68,15 +69,24 @@ class PasswordReset {
      * with a "message" property which contains a human-readable message detailing why
      * the reset failed, e.g. "There is no mapped matrix user ID for the given email address".
      */
-    checkEmailLinkClicked() {
-        return this.client.setPassword({
-            type: "m.login.email.identity",
-            threepid_creds: {
-                sid: this.sessionId,
-                client_secret: this.clientSecret,
-                id_server: this.identityServerDomain,
-            },
-        }, this.password).catch(function(err) {
+    async checkEmailLinkClicked() {
+        const creds = {
+            sid: this.sessionId,
+            client_secret: this.clientSecret,
+        };
+
+        try {
+            await this.client.setPassword({
+                // Note: Though this sounds like a login type for identity servers only, it
+                // has a dual purpose of being used for homeservers too.
+                type: "m.login.email.identity",
+                // TODO: Remove `threepid_creds` once servers support proper UIA
+                // See https://github.com/matrix-org/synapse/issues/5665
+                // See https://github.com/matrix-org/matrix-doc/issues/2220
+                threepid_creds: creds,
+                threepidCreds: creds,
+            }, this.password);
+        } catch (err) {
             if (err.httpStatus === 401) {
                 err.message = _t('Failed to verify email address: make sure you clicked the link in the email');
             } else if (err.httpStatus === 404) {
@@ -86,8 +96,7 @@ class PasswordReset {
                 err.message += ` (Status ${err.httpStatus})`;
             }
             throw err;
-        });
+        }
     }
 }
 
-module.exports = PasswordReset;

@@ -17,9 +17,12 @@ limitations under the License.
 import React from 'react';
 import PropTypes from 'prop-types';
 
-import sdk from '../../../index';
+import * as sdk from '../../../index';
 
-import { COUNTRIES } from '../../../phonenumber';
+import { COUNTRIES, getEmojiFlag } from '../../../phonenumber';
+import SdkConfig from "../../../SdkConfig";
+import { _t } from "../../../languageHandler";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
 const COUNTRIES_BY_ISO2 = {};
 for (const c of COUNTRIES) {
@@ -38,6 +41,7 @@ function countryMatchesSearchQuery(query, country) {
     return false;
 }
 
+@replaceableComponent("views.auth.CountryDropdown")
 export default class CountryDropdown extends React.Component {
     constructor(props) {
         super(props);
@@ -45,17 +49,25 @@ export default class CountryDropdown extends React.Component {
         this._onOptionChange = this._onOptionChange.bind(this);
         this._getShortOption = this._getShortOption.bind(this);
 
+        let defaultCountry = COUNTRIES[0];
+        const defaultCountryCode = SdkConfig.get()["defaultCountryCode"];
+        if (defaultCountryCode) {
+            const country = COUNTRIES.find(c => c.iso2 === defaultCountryCode.toUpperCase());
+            if (country) defaultCountry = country;
+        }
+
         this.state = {
             searchQuery: '',
+            defaultCountry,
         };
     }
 
-    componentWillMount() {
+    componentDidMount() {
         if (!this.props.value) {
-            // If no value is given, we start with the first
+            // If no value is given, we start with the default
             // country selected, but our parent component
             // doesn't know this, therefore we do this.
-            this.props.onOptionChange(COUNTRIES[0]);
+            this.props.onOptionChange(this.state.defaultCountry);
         }
     }
 
@@ -70,7 +82,7 @@ export default class CountryDropdown extends React.Component {
     }
 
     _flagImgForIso2(iso2) {
-        return <img src={require(`../../../../res/img/flags/${iso2}.png`)} />;
+        return <div className="mx_Dropdown_option_emoji">{ getEmojiFlag(iso2) }</div>;
     }
 
     _getShortOption(iso2) {
@@ -113,18 +125,25 @@ export default class CountryDropdown extends React.Component {
         const options = displayedCountries.map((country) => {
             return <div className="mx_CountryDropdown_option" key={country.iso2}>
                 { this._flagImgForIso2(country.iso2) }
-                { country.name } (+{ country.prefix })
+                { _t(country.name) } (+{ country.prefix })
             </div>;
         });
 
         // default value here too, otherwise we need to handle null / undefined
         // values between mounting and the initial value propgating
-        const value = this.props.value || COUNTRIES[0].iso2;
+        const value = this.props.value || this.state.defaultCountry.iso2;
 
-        return <Dropdown className={this.props.className + " mx_CountryDropdown"}
-            onOptionChange={this._onOptionChange} onSearchChange={this._onSearchChange}
-            menuWidth={298} getShortOption={this._getShortOption}
-            value={value} searchEnabled={true} disabled={this.props.disabled}
+        return <Dropdown
+            id="mx_CountryDropdown"
+            className={this.props.className + " mx_CountryDropdown"}
+            onOptionChange={this._onOptionChange}
+            onSearchChange={this._onSearchChange}
+            menuWidth={298}
+            getShortOption={this._getShortOption}
+            value={value}
+            searchEnabled={true}
+            disabled={this.props.disabled}
+            label={_t("Country Dropdown")}
         >
             { options }
         </Dropdown>;

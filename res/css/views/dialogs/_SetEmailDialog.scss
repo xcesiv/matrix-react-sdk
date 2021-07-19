@@ -20,7 +20,7 @@ limitations under the License.
     padding: 9px;
     color: $input-fg-color;
     background-color: $primary-bg-color;
-    font-size: 15px;
+    font-size: $font-15px;
     width: 100%;
     max-width: 280px;
     margin-bottom: 10px;
@@ -30,7 +30,4 @@ limitations under the License.
     outline: none;
     box-shadow: none;
     border: 1px solid $accent-color;
-}
-
-.mx_SetEmailDialog_email_input_placeholder {
 }

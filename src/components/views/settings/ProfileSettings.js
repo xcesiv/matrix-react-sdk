@@ -14,47 +14,64 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import React from 'react';
-import {_t} from "../../../languageHandler";
-import MatrixClientPeg from "../../../MatrixClientPeg";
+import React, { createRef } from 'react';
+import { _t } from "../../../languageHandler";
+import { MatrixClientPeg } from "../../../MatrixClientPeg";
 import Field from "../elements/Field";
-import AccessibleButton from "../elements/AccessibleButton";
-import classNames from 'classnames';
-import {User} from "matrix-js-sdk";
 import { getHostingLink } from '../../../utils/HostingLink';
+import * as sdk from "../../../index";
+import { OwnProfileStore } from "../../../stores/OwnProfileStore";
+import Modal from "../../../Modal";
+import ErrorDialog from "../dialogs/ErrorDialog";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
+import { mediaFromMxc } from "../../../customisations/Media";
 
+@replaceableComponent("views.settings.ProfileSettings")
 export default class ProfileSettings extends React.Component {
     constructor() {
         super();
 
         const client = MatrixClientPeg.get();
-        let user = client.getUser(client.getUserId());
-        if (!user) {
-            // XXX: We shouldn't have to do this.
-            // There seems to be a condition where the User object won't exist until a room
-            // exists on the account. To work around this, we'll just create a temporary User
-            // and use that.
-            console.warn("User object not found - creating one for ProfileSettings");
-            user = new User(client.getUserId());
-        }
-        let avatarUrl = user.avatarUrl;
-        if (avatarUrl) avatarUrl = client.mxcUrlToHttp(avatarUrl, 96, 96, 'crop', false);
+        let avatarUrl = OwnProfileStore.instance.avatarMxc;
+        if (avatarUrl) avatarUrl = mediaFromMxc(avatarUrl).getSquareThumbnailHttp(96);
         this.state = {
-            userId: user.userId,
-            originalDisplayName: user.displayName,
-            displayName: user.displayName,
+            userId: client.getUserId(),
+            originalDisplayName: OwnProfileStore.instance.displayName,
+            displayName: OwnProfileStore.instance.displayName,
             originalAvatarUrl: avatarUrl,
             avatarUrl: avatarUrl,
             avatarFile: null,
             enableProfileSave: false,
         };
+
+        this._avatarUpload = createRef();
     }
 
-    _uploadAvatar = (e) => {
+    _uploadAvatar = () => {
+        this._avatarUpload.current.click();
+    };
+
+    _removeAvatar = () => {
+        // clear file upload field so same file can be selected
+        this._avatarUpload.current.value = "";
+        this.setState({
+            avatarUrl: null,
+            avatarFile: null,
+            enableProfileSave: true,
+        });
+    };
+
+    _cancelProfileChanges = async (e) => {
         e.stopPropagation();
         e.preventDefault();
 
-        this.refs.avatarUpload.click();
+        if (!this.state.enableProfileSave) return;
+        this.setState({
+            enableProfileSave: false,
+            displayName: this.state.originalDisplayName,
+            avatarUrl: this.state.originalAvatarUrl,
+            avatarFile: null,
+        });
     };
 
     _saveProfile = async (e) => {
@@ -62,24 +79,37 @@ export default class ProfileSettings extends React.Component {
         e.preventDefault();
 
         if (!this.state.enableProfileSave) return;
-        this.setState({enableProfileSave: false});
+        this.setState({ enableProfileSave: false });
 
         const client = MatrixClientPeg.get();
         const newState = {};
 
-        // TODO: What do we do about errors?
+        const displayName = this.state.displayName.trim();
+        try {
+            if (this.state.originalDisplayName !== this.state.displayName) {
+                await client.setDisplayName(displayName);
+                newState.originalDisplayName = displayName;
+                newState.displayName = displayName;
+            }
 
-        if (this.state.originalDisplayName !== this.state.displayName) {
-            await client.setDisplayName(this.state.displayName);
-            newState.originalDisplayName = this.state.displayName;
-        }
-
-        if (this.state.avatarFile) {
-            const uri = await client.uploadContent(this.state.avatarFile);
-            await client.setAvatarUrl(uri);
-            newState.avatarUrl = client.mxcUrlToHttp(uri, 96, 96, 'crop', false);
-            newState.originalAvatarUrl = newState.avatarUrl;
-            newState.avatarFile = null;
+            if (this.state.avatarFile) {
+                console.log(
+                    `Uploading new avatar, ${this.state.avatarFile.name} of type ${this.state.avatarFile.type},` +
+                    ` (${this.state.avatarFile.size}) bytes`);
+                const uri = await client.uploadContent(this.state.avatarFile);
+                await client.setAvatarUrl(uri);
+                newState.avatarUrl = mediaFromMxc(uri).getSquareThumbnailHttp(96);
+                newState.originalAvatarUrl = newState.avatarUrl;
+                newState.avatarFile = null;
+            } else if (this.state.originalAvatarUrl !== this.state.avatarUrl) {
+                await client.setAvatarUrl(""); // use empty string as Synapse 500s on undefined
+            }
+        } catch (err) {
+            console.log("Failed to save profile", err);
+            Modal.createTrackedDialog('Failed to save profile', '', ErrorDialog, {
+                title: _t("Failed to save your profile"),
+                description: ((err && err.message) ? err.message : _t("The operation could not be completed")),
+            });
         }
 
         this.setState(newState);
@@ -115,29 +145,6 @@ export default class ProfileSettings extends React.Component {
     };
 
     render() {
-        // TODO: Why is rendering a box with an overlay so complicated? Can the DOM be reduced?
-
-        let showOverlayAnyways = true;
-        let avatarElement = <div className="mx_ProfileSettings_avatarPlaceholder" />;
-        if (this.state.avatarUrl) {
-            showOverlayAnyways = false;
-            avatarElement = <img src={this.state.avatarUrl}
-                                 alt={_t("Profile picture")} />;
-        }
-
-        const avatarOverlayClasses = classNames({
-            "mx_ProfileSettings_avatarOverlay": true,
-            "mx_ProfileSettings_avatarOverlay_show": showOverlayAnyways,
-        });
-        const avatarHoverElement = (
-            <div className={avatarOverlayClasses} onClick={this._uploadAvatar}>
-                <span className="mx_ProfileSettings_avatarOverlayText">{_t("Upload profile picture")}</span>
-                <div className="mx_ProfileSettings_avatarOverlayImgContainer">
-                    <div className="mx_ProfileSettings_avatarOverlayImg" />
-                </div>
-            </div>
-        );
-
         const hostingSignupLink = getHostingLink('user-settings');
         let hostingSignup = null;
         if (hostingSignupLink) {
@@ -145,38 +152,67 @@ export default class ProfileSettings extends React.Component {
                 {_t(
                     "<a>Upgrade</a> to your own domain", {},
                     {
-                        a: sub => <a href={hostingSignupLink} target="_blank" rel="noopener">{sub}</a>,
+                        a: sub => <a href={hostingSignupLink} target="_blank" rel="noreferrer noopener">{sub}</a>,
                     },
                 )}
-                <a href={hostingSignupLink} target="_blank" rel="noopener">
+                <a href={hostingSignupLink} target="_blank" rel="noreferrer noopener">
                     <img src={require("../../../../res/img/external-link.svg")} width="11" height="10" alt='' />
                 </a>
             </span>;
         }
 
+        const AccessibleButton = sdk.getComponent('elements.AccessibleButton');
+        const AvatarSetting = sdk.getComponent('settings.AvatarSetting');
         return (
-            <form onSubmit={this._saveProfile} autoComplete={false} noValidate={true}>
-                <input type="file" ref="avatarUpload" className="mx_ProfileSettings_avatarUpload"
-                       onChange={this._onAvatarChanged} accept="image/*" />
+            <form
+                onSubmit={this._saveProfile}
+                autoComplete="off"
+                noValidate={true}
+                className="mx_ProfileSettings_profileForm"
+            >
+                <input
+                    type="file"
+                    ref={this._avatarUpload} className="mx_ProfileSettings_avatarUpload"
+                    onChange={this._onAvatarChanged}
+                    accept="image/*"
+                />
                 <div className="mx_ProfileSettings_profile">
                     <div className="mx_ProfileSettings_controls">
+                        <span className="mx_SettingsTab_subheading">{_t("Profile")}</span>
+                        <Field
+                            label={_t("Display Name")}
+                            type="text" value={this.state.displayName}
+                            autoComplete="off"
+                            onChange={this._onDisplayNameChanged}
+                        />
                         <p>
                             {this.state.userId}
                             {hostingSignup}
                         </p>
-                        <Field id="profileDisplayName" label={_t("Display Name")}
-                               type="text" value={this.state.displayName} autoComplete="off"
-                               onChange={this._onDisplayNameChanged} />
                     </div>
-                    <div className="mx_ProfileSettings_avatar">
-                        {avatarElement}
-                        {avatarHoverElement}
-                    </div>
+                    <AvatarSetting
+                        avatarUrl={this.state.avatarUrl}
+                        avatarName={this.state.displayName || this.state.userId}
+                        avatarAltText={_t("Profile picture")}
+                        uploadAvatar={this._uploadAvatar}
+                        removeAvatar={this._removeAvatar} />
                 </div>
-                <AccessibleButton onClick={this._saveProfile} kind="primary"
-                                  disabled={!this.state.enableProfileSave}>
-                    {_t("Save")}
-                </AccessibleButton>
+                <div className="mx_ProfileSettings_buttons">
+                    <AccessibleButton
+                        onClick={this._cancelProfileChanges}
+                        kind="link"
+                        disabled={!this.state.enableProfileSave}
+                    >
+                        {_t("Cancel")}
+                    </AccessibleButton>
+                    <AccessibleButton
+                        onClick={this._saveProfile}
+                        kind="primary"
+                        disabled={!this.state.enableProfileSave}
+                    >
+                        {_t("Save")}
+                    </AccessibleButton>
+                </div>
             </form>
         );
     }

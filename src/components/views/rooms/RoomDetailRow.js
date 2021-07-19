@@ -1,5 +1,5 @@
 /*
-Copyright 2017 New Vector Ltd.
+Copyright 2017-2021 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,16 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import sdk from '../../../index';
-import React from 'react';
+import * as sdk from '../../../index';
+import React, { createRef } from 'react';
 import { _t } from '../../../languageHandler';
 import { linkifyElement } from '../../../HtmlUtils';
-import { ContentRepo } from 'matrix-js-sdk';
-import MatrixClientPeg from '../../../MatrixClientPeg';
 import PropTypes from 'prop-types';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
+import { mediaFromMxc } from "../../../customisations/Media";
+import { getDisplayAliasForAliasSet } from '../../../Rooms';
 
 export function getDisplayAliasForRoom(room) {
-    return room.canonicalAlias || (room.aliases ? room.aliases[0] : "");
+    return getDisplayAliasForAliasSet(room.canonicalAlias, room.aliases);
 }
 
 export const roomShape = PropTypes.shape({
@@ -39,71 +40,79 @@ export const roomShape = PropTypes.shape({
     guestCanJoin: PropTypes.bool,
 });
 
-export default React.createClass({
-    propTypes: {
+@replaceableComponent("views.rooms.RoomDetailRow")
+export default class RoomDetailRow extends React.Component {
+    static propTypes = {
         room: roomShape,
         // passes ev, room as args
         onClick: PropTypes.func,
         onMouseDown: PropTypes.func,
-    },
+    };
 
-    _linkifyTopic: function() {
-        if (this.refs.topic) {
-            linkifyElement(this.refs.topic);
+    constructor(props) {
+        super(props);
+
+        this._topic = createRef();
+    }
+
+    componentDidMount() {
+        this._linkifyTopic();
+    }
+
+    componentDidUpdate() {
+        this._linkifyTopic();
+    }
+
+    _linkifyTopic() {
+        if (this._topic.current) {
+            linkifyElement(this._topic.current);
         }
-    },
+    }
 
-    componentDidMount: function() {
-        this._linkifyTopic();
-    },
-
-    componentDidUpdate: function() {
-        this._linkifyTopic();
-    },
-
-    onClick: function(ev) {
+    onClick = (ev) => {
         ev.preventDefault();
         if (this.props.onClick) {
             this.props.onClick(ev, this.props.room);
         }
-    },
+    };
 
-    onTopicClick: function(ev) {
+    onTopicClick = (ev) => {
         // When clicking a link in the topic, prevent the event being propagated
         // to `onClick`.
         ev.stopPropagation();
-    },
+    };
 
-    render: function() {
+    render() {
         const BaseAvatar = sdk.getComponent('avatars.BaseAvatar');
 
         const room = this.props.room;
         const name = room.name || getDisplayAliasForRoom(room) || _t('Unnamed room');
 
         const guestRead = room.worldReadable ? (
-                <div className="mx_RoomDirectory_perm">{ _t('World readable') }</div>
-            ) : <div />;
+            <div className="mx_RoomDirectory_perm">{ _t('World readable') }</div>
+        ) : <div />;
         const guestJoin = room.guestCanJoin ? (
-                <div className="mx_RoomDirectory_perm">{ _t('Guests can join') }</div>
-            ) : <div />;
+            <div className="mx_RoomDirectory_perm">{ _t('Guests can join') }</div>
+        ) : <div />;
 
         const perms = (guestRead || guestJoin) ? (<div className="mx_RoomDirectory_perms">
             { guestRead }&nbsp;
             { guestJoin }
         </div>) : <div />;
 
+        let avatarUrl = null;
+        if (room.avatarUrl) avatarUrl = mediaFromMxc(room.avatarUrl).getSquareThumbnailHttp(24);
+
         return <tr key={room.roomId} onClick={this.onClick} onMouseDown={this.props.onMouseDown}>
             <td className="mx_RoomDirectory_roomAvatar">
                 <BaseAvatar width={24} height={24} resizeMethod='crop'
                     name={name} idName={name}
-                    url={ContentRepo.getHttpUriForMxc(
-                            MatrixClientPeg.get().getHomeserverUrl(),
-                            room.avatarUrl, 24, 24, "crop")} />
+                    url={avatarUrl} />
             </td>
             <td className="mx_RoomDirectory_roomDescription">
                 <div className="mx_RoomDirectory_name">{ name }</div>&nbsp;
                 { perms }
-                <div className="mx_RoomDirectory_topic" ref="topic" onClick={this.onTopicClick}>
+                <div className="mx_RoomDirectory_topic" ref={this._topic} onClick={this.onTopicClick}>
                     { room.topic }
                 </div>
                 <div className="mx_RoomDirectory_alias">{ getDisplayAliasForRoom(room) }</div>
@@ -112,5 +121,5 @@ export default React.createClass({
                 { room.numJoinedMembers }
             </td>
         </tr>;
-    },
-});
+    }
+}

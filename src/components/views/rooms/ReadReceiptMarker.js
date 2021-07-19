@@ -1,5 +1,6 @@
 /*
 Copyright 2016 OpenMarket Ltd
+Copyright 2019 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,32 +15,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-'use strict';
-
-const React = require('react');
-const ReactDOM = require('react-dom');
+import React, { createRef } from 'react';
 import PropTypes from 'prop-types';
-
-const sdk = require('../../../index');
-
-const Velociraptor = require('../../../Velociraptor');
-require('../../../VelocityBounce');
 import { _t } from '../../../languageHandler';
+import { formatDate } from '../../../DateUtils';
+import NodeAnimator from "../../../NodeAnimator";
+import * as sdk from "../../../index";
+import { toPx } from "../../../utils/units";
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
-import {formatDate} from '../../../DateUtils';
-
-let bounce = false;
-try {
-    if (global.localStorage) {
-        bounce = global.localStorage.getItem('avatar_bounce') == 'true';
-    }
-} catch (e) {
-}
-
-module.exports = React.createClass({
-    displayName: 'ReadReceiptMarker',
-
-    propTypes: {
+@replaceableComponent("views.rooms.ReadReceiptMarker")
+export default class ReadReceiptMarker extends React.PureComponent {
+    static propTypes = {
         // the RoomMember to show the RR for
         member: PropTypes.object,
         // userId to fallback the avatar to
@@ -73,25 +60,27 @@ module.exports = React.createClass({
 
         // True to show twelve hour format, false otherwise
         showTwelveHour: PropTypes.bool,
-    },
+    };
 
-    getDefaultProps: function() {
-        return {
-            leftOffset: 0,
-        };
-    },
+    static defaultProps = {
+        leftOffset: 0,
+    };
 
-    getInitialState: function() {
-        // if we are going to animate the RR, we don't show it on first render,
-        // and instead just add a placeholder to the DOM; once we've been
-        // mounted, we start an animation which moves the RR from its old
-        // position.
-        return {
+    constructor(props) {
+        super(props);
+
+        this._avatar = createRef();
+
+        this.state = {
+            // if we are going to animate the RR, we don't show it on first render,
+            // and instead just add a placeholder to the DOM; once we've been
+            // mounted, we start an animation which moves the RR from its old
+            // position.
             suppressDisplay: !this.props.suppressAnimation,
         };
-    },
+    }
 
-    componentWillUnmount: function() {
+    componentWillUnmount() {
         // before we remove the rr, store its location in the map, so that if
         // it reappears, it can be animated from the right place.
         const rrInfo = this.props.readReceiptInfo;
@@ -106,18 +95,29 @@ module.exports = React.createClass({
             return;
         }
 
-        const avatarNode = ReactDOM.findDOMNode(this);
+        const avatarNode = this._avatar.current;
         rrInfo.top = avatarNode.offsetTop;
         rrInfo.left = avatarNode.offsetLeft;
         rrInfo.parent = avatarNode.offsetParent;
-    },
+    }
 
-    componentDidMount: function() {
+    componentDidMount() {
         if (!this.state.suppressDisplay) {
             // we've already done our display - nothing more to do.
             return;
         }
+        this._animateMarker();
+    }
 
+    componentDidUpdate(prevProps) {
+        const differentLeftOffset = prevProps.leftOffset !== this.props.leftOffset;
+        const visibilityChanged = prevProps.hidden !== this.props.hidden;
+        if (differentLeftOffset || visibilityChanged) {
+            this._animateMarker();
+        }
+    }
+
+    _animateMarker() {
         // treat new RRs as though they were off the top of the screen
         let oldTop = -15;
 
@@ -126,7 +126,7 @@ module.exports = React.createClass({
             oldTop = oldInfo.top + oldInfo.parent.getBoundingClientRect().top;
         }
 
-        const newElement = ReactDOM.findDOMNode(this);
+        const newElement = this._avatar.current;
         let startTopOffset;
         if (!newElement.offsetParent) {
             // this seems to happen sometimes for reasons I don't understand
@@ -141,48 +141,30 @@ module.exports = React.createClass({
         }
 
         const startStyles = [];
-        const enterTransitionOpts = [];
 
         if (oldInfo && oldInfo.left) {
             // start at the old height and in the old h pos
-
             startStyles.push({ top: startTopOffset+"px",
-                               left: oldInfo.left+"px" });
-
-            const reorderTransitionOpts = {
-                duration: 100,
-                easing: 'easeOut',
-            };
-
-            enterTransitionOpts.push(reorderTransitionOpts);
+                               left: toPx(oldInfo.left) });
         }
 
-        // then shift to the rightmost column,
-        // and then it will drop down to its resting position
-        startStyles.push({ top: startTopOffset+'px', left: '0px' });
-        enterTransitionOpts.push({
-            duration: bounce ? Math.min(Math.log(Math.abs(startTopOffset)) * 200, 3000) : 300,
-            easing: bounce ? 'easeOutBounce' : 'easeOutCubic',
-        });
+        startStyles.push({ top: startTopOffset+'px', left: '0' });
 
         this.setState({
             suppressDisplay: false,
             startStyles: startStyles,
-            enterTransitionOpts: enterTransitionOpts,
         });
-    },
+    }
 
-
-    render: function() {
+    render() {
         const MemberAvatar = sdk.getComponent('avatars.MemberAvatar');
         if (this.state.suppressDisplay) {
-            return <div />;
+            return <div ref={this._avatar} />;
         }
 
         const style = {
-            left: this.props.leftOffset+'px',
+            left: toPx(this.props.leftOffset),
             top: '0px',
-            visibility: this.props.hidden ? 'hidden' : 'visible',
         };
 
         let title;
@@ -191,23 +173,21 @@ module.exports = React.createClass({
             if (!this.props.member || this.props.fallbackUserId === this.props.member.rawDisplayName) {
                 title = _t(
                     "Seen by %(userName)s at %(dateTime)s",
-                    {userName: this.props.fallbackUserId,
-                    dateTime: dateString},
+                    { userName: this.props.fallbackUserId,
+                    dateTime: dateString },
                 );
             } else {
                 title = _t(
                     "Seen by %(displayName)s (%(userName)s) at %(dateTime)s",
-                    {displayName: this.props.member.rawDisplayName,
+                    { displayName: this.props.member.rawDisplayName,
                     userName: this.props.fallbackUserId,
-                    dateTime: dateString},
+                    dateTime: dateString },
                 );
             }
         }
 
         return (
-            <Velociraptor
-                    startStyles={this.state.startStyles}
-                    enterTransitionOpts={this.state.enterTransitionOpts} >
+            <NodeAnimator startStyles={this.state.startStyles}>
                 <MemberAvatar
                     member={this.props.member}
                     fallbackUserId={this.props.fallbackUserId}
@@ -216,8 +196,9 @@ module.exports = React.createClass({
                     style={style}
                     title={title}
                     onClick={this.props.onClick}
+                    inputRef={this._avatar}
                 />
-            </Velociraptor>
+            </NodeAnimator>
         );
-    },
-});
+    }
+}

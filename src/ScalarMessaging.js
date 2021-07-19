@@ -16,6 +16,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// TODO: Generify the name of this and all components within - it's not just for scalar.
+
 /*
 Listens for incoming postMessage requests from the integrations UI URL. The following API is exposed:
 {
@@ -172,6 +174,7 @@ Request:
 Response:
 [
     {
+        // TODO: Enable support for m.widget event type (https://github.com/vector-im/element-web/issues/13111)
         type: "im.vector.modular.widgets",
         state_key: "wid1",
         content: {
@@ -190,6 +193,7 @@ Example:
     room_id: "!foo:bar",
     response: [
         {
+            // TODO: Enable support for m.widget event type (https://github.com/vector-im/element-web/issues/13111)
             type: "im.vector.modular.widgets",
             state_key: "wid1",
             content: {
@@ -203,7 +207,6 @@ Example:
         }
     ]
 }
-
 
 membership_state AND bot_options
 --------------------------------
@@ -232,23 +235,25 @@ Example:
 }
 */
 
-import SdkConfig from './SdkConfig';
-import MatrixClientPeg from './MatrixClientPeg';
-import { MatrixEvent } from 'matrix-js-sdk';
-import dis from './dispatcher';
+import { MatrixClientPeg } from './MatrixClientPeg';
+import { MatrixEvent } from 'matrix-js-sdk/src/models/event';
+import dis from './dispatcher/dispatcher';
 import WidgetUtils from './utils/WidgetUtils';
 import RoomViewStore from './stores/RoomViewStore';
 import { _t } from './languageHandler';
+import { IntegrationManagers } from "./integrations/IntegrationManagers";
+import { WidgetType } from "./widgets/WidgetType";
+import { objectClone } from "./utils/objects";
 
 function sendResponse(event, res) {
-    const data = JSON.parse(JSON.stringify(event.data));
+    const data = objectClone(event.data);
     data.response = res;
     event.source.postMessage(data, event.origin);
 }
 
 function sendError(event, msg, nestedError) {
     console.error("Action:" + event.data.action + " failed with message: " + msg);
-    const data = JSON.parse(JSON.stringify(event.data));
+    const data = objectClone(event.data);
     data.response = {
         error: {
             message: msg,
@@ -279,7 +284,7 @@ function inviteUser(event, roomId, userId) {
         }
     }
 
-    client.invite(roomId, userId).done(function() {
+    client.invite(roomId, userId).then(function() {
         sendResponse(event, {
             success: true,
         });
@@ -290,7 +295,7 @@ function inviteUser(event, roomId, userId) {
 
 function setWidget(event, roomId) {
     const widgetId = event.data.widget_id;
-    const widgetType = event.data.type;
+    let widgetType = event.data.type;
     const widgetUrl = event.data.url;
     const widgetName = event.data.name; // optional
     const widgetData = event.data.data; // optional
@@ -321,6 +326,9 @@ function setWidget(event, roomId) {
             return;
         }
     }
+
+    // convert the widget type to a known widget type
+    widgetType = WidgetType.fromString(widgetType);
 
     if (userWidget) {
         WidgetUtils.setUserWidget(widgetId, widgetType, widgetUrl, widgetName, widgetData).then(() => {
@@ -398,7 +406,7 @@ function setPlumbingState(event, roomId, status) {
         sendError(event, _t('You need to be logged in.'));
         return;
     }
-    client.sendStateEvent(roomId, "m.room.plumbing", { status: status }).done(() => {
+    client.sendStateEvent(roomId, "m.room.plumbing", { status: status }).then(() => {
         sendResponse(event, {
             success: true,
         });
@@ -414,7 +422,7 @@ function setBotOptions(event, roomId, userId) {
         sendError(event, _t('You need to be logged in.'));
         return;
     }
-    client.sendStateEvent(roomId, "m.room.bot.options", event.data.content, "_" + userId).done(() => {
+    client.sendStateEvent(roomId, "m.room.bot.options", event.data.content, "_" + userId).then(() => {
         sendResponse(event, {
             success: true,
         });
@@ -444,7 +452,7 @@ function setBotPower(event, roomId, userId, level) {
             },
         );
 
-        client.setPowerLevel(roomId, userId, level, powerEvent).done(() => {
+        client.setPowerLevel(roomId, userId, level, powerEvent).then(() => {
             sendResponse(event, {
                 success: true,
             });
@@ -546,20 +554,30 @@ const onMessage = function(event) {
     // This means the URL could contain a path (like /develop) and still be used
     // to validate event origins, which do not specify paths.
     // (See https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage)
-    //
-    // All strings start with the empty string, so for sanity return if the length
-    // of the event origin is 0.
-    //
+    let configUrl;
+    try {
+        if (!openManagerUrl) openManagerUrl = IntegrationManagers.sharedInstance().getPrimaryManager().uiUrl;
+        configUrl = new URL(openManagerUrl);
+    } catch (e) {
+        // No integrations UI URL, ignore silently.
+        return;
+    }
+    let eventOriginUrl;
+    try {
+        eventOriginUrl = new URL(event.origin);
+    } catch (e) {
+        return;
+    }
     // TODO -- Scalar postMessage API should be namespaced with event.data.api field
     // Fix following "if" statement to respond only to specific API messages.
-    const url = SdkConfig.get().integrations_ui_url;
     if (
-        event.origin.length === 0 ||
-        !url.startsWith(event.origin + '/') ||
+        configUrl.origin !== eventOriginUrl.origin ||
         !event.data.action ||
         event.data.api // Ignore messages with specific API set
     ) {
-        return; // don't log this - debugging APIs like to spam postMessage which floods the log otherwise
+        // don't log this - debugging APIs and browser add-ons like to spam
+        // postMessage which floods the log otherwise
+        return;
     }
 
     if (event.data.action === "close_scalar") {
@@ -589,7 +607,7 @@ const onMessage = function(event) {
     }
 
     if (roomId !== RoomViewStore.getRoomId()) {
-        sendError(event, _t('Room %(roomId)s not visible', {roomId: roomId}));
+        sendError(event, _t('Room %(roomId)s not visible', { roomId: roomId }));
         return;
     }
 
@@ -647,26 +665,30 @@ const onMessage = function(event) {
 };
 
 let listenerCount = 0;
-module.exports = {
-    startListening: function() {
-        if (listenerCount === 0) {
-            window.addEventListener("message", onMessage, false);
-        }
-        listenerCount += 1;
-    },
+let openManagerUrl = null;
 
-    stopListening: function() {
-        listenerCount -= 1;
-        if (listenerCount === 0) {
-            window.removeEventListener("message", onMessage);
-        }
-        if (listenerCount < 0) {
-            // Make an error so we get a stack trace
-            const e = new Error(
-                "ScalarMessaging: mismatched startListening / stopListening detected." +
-                " Negative count",
-            );
-            console.error(e);
-        }
-    },
-};
+export function startListening() {
+    if (listenerCount === 0) {
+        window.addEventListener("message", onMessage, false);
+    }
+    listenerCount += 1;
+}
+
+export function stopListening() {
+    listenerCount -= 1;
+    if (listenerCount === 0) {
+        window.removeEventListener("message", onMessage);
+    }
+    if (listenerCount < 0) {
+        // Make an error so we get a stack trace
+        const e = new Error(
+            "ScalarMessaging: mismatched startListening / stopListening detected." +
+            " Negative count",
+        );
+        console.error(e);
+    }
+}
+
+export function setOpenManagerUrl(url) {
+    openManagerUrl = url;
+}

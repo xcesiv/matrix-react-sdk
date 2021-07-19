@@ -1,5 +1,6 @@
 /*
 Copyright 2018, 2019 New Vector Ltd
+Copyright 2020 The Matrix.org Foundation C.I.C.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,15 +17,18 @@ limitations under the License.
 
 import React from 'react';
 import Modal from '../../../Modal';
-import sdk from '../../../index';
-import dis from '../../../dispatcher';
+import * as sdk from '../../../index';
+import dis from '../../../dispatcher/dispatcher';
 import { _t } from '../../../languageHandler';
-import MatrixClientPeg from '../../../MatrixClientPeg';
+import { MatrixClientPeg } from '../../../MatrixClientPeg';
+import RestoreKeyBackupDialog from './security/RestoreKeyBackupDialog';
+import { replaceableComponent } from "../../../utils/replaceableComponent";
 
+@replaceableComponent("views.dialogs.LogoutDialog")
 export default class LogoutDialog extends React.Component {
     defaultProps = {
         onFinished: function() {},
-    }
+    };
 
     constructor() {
         super();
@@ -34,9 +38,11 @@ export default class LogoutDialog extends React.Component {
         this._onSetRecoveryMethodClick = this._onSetRecoveryMethodClick.bind(this);
         this._onLogoutConfirm = this._onLogoutConfirm.bind(this);
 
-        const shouldLoadBackupStatus = !MatrixClientPeg.get().getKeyBackupEnabled();
+        const cli = MatrixClientPeg.get();
+        const shouldLoadBackupStatus = cli.isCryptoEnabled() && !cli.getKeyBackupEnabled();
 
         this.state = {
+            shouldLoadBackupStatus: shouldLoadBackupStatus,
             loading: shouldLoadBackupStatus,
             backupInfo: null,
             error: null,
@@ -70,7 +76,7 @@ export default class LogoutDialog extends React.Component {
 
     _onExportE2eKeysClicked() {
         Modal.createTrackedDialogAsync('Export E2E Keys', '',
-            import('../../../async-components/views/dialogs/ExportE2eKeysDialog'),
+            import('../../../async-components/views/dialogs/security/ExportE2eKeysDialog'),
             {
                 matrixClient: MatrixClientPeg.get(),
             },
@@ -79,7 +85,7 @@ export default class LogoutDialog extends React.Component {
 
     _onFinished(confirmed) {
         if (confirmed) {
-            dis.dispatch({action: 'logout'});
+            dis.dispatch({ action: 'logout' });
         }
         // close dialog
         this.props.onFinished();
@@ -90,11 +96,14 @@ export default class LogoutDialog extends React.Component {
             // A key backup exists for this account, but the creating device is not
             // verified, so restore the backup which will give us the keys from it and
             // allow us to trust it (ie. upload keys to it)
-            const RestoreKeyBackupDialog = sdk.getComponent('dialogs.keybackup.RestoreKeyBackupDialog');
-            Modal.createTrackedDialog('Restore Backup', '', RestoreKeyBackupDialog, {});
+            Modal.createTrackedDialog(
+                'Restore Backup', '', RestoreKeyBackupDialog, null, null,
+                /* priority = */ false, /* static = */ true,
+            );
         } else {
             Modal.createTrackedDialogAsync("Key Backup", "Key Backup",
-                import("../../../async-components/views/dialogs/keybackup/CreateKeyBackupDialog"),
+                import("../../../async-components/views/dialogs/security/CreateKeyBackupDialog"),
+                null, null, /* priority = */ false, /* static = */ true,
             );
         }
 
@@ -103,23 +112,23 @@ export default class LogoutDialog extends React.Component {
     }
 
     _onLogoutConfirm() {
-        dis.dispatch({action: 'logout'});
+        dis.dispatch({ action: 'logout' });
 
         // close dialog
         this.props.onFinished();
     }
 
     render() {
-        const description = <div>
-            <p>{_t(
-                "Encrypted messages are secured with end-to-end encryption. " +
-                "Only you and the recipient(s) have the keys to read these messages.",
-            )}</p>
-            <p>{_t("Back up your keys before signing out to avoid losing them.")}</p>
-        </div>;
-
-        if (!MatrixClientPeg.get().getKeyBackupEnabled()) {
+        if (this.state.shouldLoadBackupStatus) {
             const BaseDialog = sdk.getComponent('views.dialogs.BaseDialog');
+
+            const description = <div>
+                <p>{_t(
+                    "Encrypted messages are secured with end-to-end encryption. " +
+                    "Only you and the recipient(s) have the keys to read these messages.",
+                )}</p>
+                <p>{_t("Back up your keys before signing out to avoid losing them.")}</p>
+            </div>;
 
             let dialogContent;
             if (this.state.loading) {
@@ -130,7 +139,7 @@ export default class LogoutDialog extends React.Component {
                 const DialogButtons = sdk.getComponent('views.elements.DialogButtons');
                 let setupButtonCaption;
                 if (this.state.backupInfo) {
-                    setupButtonCaption = _t("Use Key Backup");
+                    setupButtonCaption = _t("Connect this session to Key Backup");
                 } else {
                     // if there's an error fetching the backup info, we'll just assume there's
                     // no backup for the purpose of the button caption

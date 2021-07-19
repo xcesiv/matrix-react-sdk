@@ -19,6 +19,7 @@ limitations under the License.
     flex-direction: column;
     flex: 1;
     overflow-y: auto;
+    margin-top: 8px;
 }
 
 .mx_MemberInfo_name {
@@ -43,10 +44,12 @@ limitations under the License.
 
 .mx_MemberInfo_name h2 {
     flex: 1;
+    overflow-x: auto;
+    max-height: 50px;
 }
 
 .mx_MemberInfo h2 {
-    font-size: 18px;
+    font-size: $font-18px;
     font-weight: 600;
     margin: 16px 0 16px 15px;
 }
@@ -68,7 +71,7 @@ limitations under the License.
 }
 
 .mx_MemberInfo_avatar {
-    background: $tagpanel-bg-color;
+    background: $groupFilterPanel-bg-color;
     margin-bottom: 16px;
 }
 
@@ -78,9 +81,6 @@ limitations under the License.
     max-height: 30vh;
     object-fit: contain;
     display: block;
-}
-
-.mx_MemberInfo_avatar .mx_BaseAvatar {
 }
 
 .mx_MemberInfo_avatar .mx_BaseAvatar.mx_BaseAvatar_image {
@@ -95,12 +95,12 @@ limitations under the License.
     text-transform: uppercase;
     color: $input-darker-fg-color;
     font-weight: bold;
-    font-size: 12px;
+    font-size: $font-12px;
     margin: 4px 0;
 }
 
 .mx_MemberInfo_profileField {
-    font-size: 15px;
+    font-size: $font-15px;
     position: relative;
 }
 
@@ -110,10 +110,10 @@ limitations under the License.
 
 .mx_MemberInfo_field {
     cursor: pointer;
-    font-size: 15px;
+    font-size: $font-15px;
     color: $primary-fg-color;
     margin-left: 8px;
-    line-height: 23px;
+    line-height: $font-23px;
 }
 
 .mx_MemberInfo_createRoom {
@@ -124,12 +124,12 @@ limitations under the License.
 }
 
 .mx_MemberInfo_createRoom_label {
-    width: initial ! important;
+    width: initial !important;
     cursor: pointer;
 }
 
 .mx_MemberInfo label {
-    font-size: 13px;
+    font-size: $font-13px;
 }
 
 .mx_MemberInfo label .mx_MemberInfo_label_text {
@@ -145,7 +145,7 @@ limitations under the License.
 }
 
 .mx_MemberInfo_statusMessage {
-    font-size: 11px;
+    font-size: $font-11px;
     opacity: 0.5;
     overflow: hidden;
     white-space: nowrap;

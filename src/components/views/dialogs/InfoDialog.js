@@ -18,47 +18,54 @@ limitations under the License.
 
 import React from 'react';
 import PropTypes from 'prop-types';
-import sdk from '../../../index';
+import * as sdk from '../../../index';
 import { _t } from '../../../languageHandler';
+import classNames from "classnames";
 
-export default React.createClass({
-    displayName: 'InfoDialog',
-    propTypes: {
+export default class InfoDialog extends React.Component {
+    static propTypes = {
+        className: PropTypes.string,
         title: PropTypes.string,
         description: PropTypes.node,
-        button: PropTypes.string,
+        button: PropTypes.oneOfType([PropTypes.string, PropTypes.bool]),
         onFinished: PropTypes.func,
-    },
+        hasCloseButton: PropTypes.bool,
+        onKeyDown: PropTypes.func,
+        fixedWidth: PropTypes.bool,
+    };
 
-    getDefaultProps: function() {
-        return {
-            title: '',
-            description: '',
-        };
-    },
+    static defaultProps = {
+        title: '',
+        description: '',
+        hasCloseButton: false,
+    };
 
-    onFinished: function() {
+    onFinished = () => {
         this.props.onFinished();
-    },
+    };
 
-    render: function() {
+    render() {
         const BaseDialog = sdk.getComponent('views.dialogs.BaseDialog');
         const DialogButtons = sdk.getComponent('views.elements.DialogButtons');
         return (
-            <BaseDialog className="mx_InfoDialog" onFinished={this.props.onFinished}
+            <BaseDialog
+                className="mx_InfoDialog"
+                onFinished={this.props.onFinished}
                 title={this.props.title}
                 contentId='mx_Dialog_content'
-                hasCancel={false}
+                hasCancel={this.props.hasCloseButton}
+                onKeyDown={this.props.onKeyDown}
+                fixedWidth={this.props.fixedWidth}
             >
-                <div className="mx_Dialog_content" id="mx_Dialog_content">
+                <div className={classNames("mx_Dialog_content", this.props.className)} id="mx_Dialog_content">
                     { this.props.description }
                 </div>
-                <DialogButtons primaryButton={this.props.button || _t('OK')}
+                { this.props.button !== false && <DialogButtons primaryButton={this.props.button || _t('OK')}
                     onPrimaryButtonClick={this.onFinished}
                     hasCancel={false}
                 >
-                </DialogButtons>
+                </DialogButtons> }
             </BaseDialog>
         );
-    },
-});
+    }
+}
